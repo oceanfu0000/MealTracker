@@ -1,0 +1,108 @@
+@import './styles/theme.css';
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    margin: 0;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+p {
+    color: var(--text-secondary);
+}
+
+/* Mobile First Container */
+.app-container {
+    max-width: 480px;
+    /* Mobile width constraint */
+    margin: 0 auto;
+    min-height: 100vh;
+    padding: 1rem;
+    padding-top: 5rem;
+    /* Space for sticky header */
+    position: relative;
+}
+
+/* Button Component Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border: none;
+    outline: none;
+}
+
+.btn-primary {
+    background: var(--text-accent);
+    color: var(--bg-deep);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.btn-primary:hover {
+    filter: brightness(1.1);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+}
+
+.btn-secondary {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background: var(--glass-highlight);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.btn-sm {
+    height: 2rem;
+    padding: 0 0.75rem;
+    font-size: 0.875rem;
+}
+
+.btn-md {
+    height: 2.5rem;
+    padding: 0 1rem;
+    font-size: 1rem;
+}
+
+.btn-lg {
+    height: 3rem;
+    padding: 0 1.5rem;
+    font-size: 1.125rem;
+}
+
+.btn-icon {
+    height: 2.5rem;
+    width: 2.5rem;
+    padding: 0.5rem;
+}

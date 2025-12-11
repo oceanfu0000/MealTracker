@@ -1,0 +1,58 @@
+:root {
+  /* Colors - Deep Space & Starlight */
+  --bg-deep: #0f172a; /* Slate 900 */
+  --bg-gradient-start: #0f172a;
+  --bg-gradient-end: #1e293b; /* Slate 800 */
+  
+  --text-primary: #f8fafc; /* Slate 50 */
+  --text-secondary: #94a3b8; /* Slate 400 */
+  --text-accent: #38bdf8; /* Sky 400 */
+
+  /* Glassmorphism */
+  --glass-bg: rgba(30, 41, 59, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-highlight: rgba(255, 255, 255, 0.05);
+
+  /* Levitation & Shadows */
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  --glow-accent: 0 0 15px rgba(56, 189, 248, 0.3);
+
+  /* Spacing & Radius */
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-full: 9999px;
+
+  /* Animation */
+  --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-float: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body {
+  background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Utilities */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.float-hover {
+  transition: transform var(--transition-float), box-shadow var(--transition-float);
+}
+
+.float-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg), var(--glow-accent);
+}
