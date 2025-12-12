@@ -174,16 +174,26 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         const qty = parseFloat(quantity);
 
         try {
+            console.log('Debug Calculation:', {
+                item: selectedQuickItem,
+                qty,
+                servingSize: selectedQuickItem.serving_size,
+                ratio: qty / (selectedQuickItem.serving_size || 1)
+            });
+
+            const servingSize = selectedQuickItem.serving_size || 1;
+            const ratio = qty / servingSize;
+
             const result = await insertMeal({
                 user_id: userId,
                 meal_type: 'quick',
-                description: `${selectedQuickItem.name} (${qty} ${selectedQuickItem.default_unit})`,
+                description: `${selectedQuickItem.name}`,
                 image_url: null,
                 quantity: qty,
-                calories: Math.round(selectedQuickItem.calories_per_unit * qty),
-                protein: selectedQuickItem.protein_per_unit * qty,
-                carbs: selectedQuickItem.carbs_per_unit * qty,
-                fat: selectedQuickItem.fat_per_unit * qty,
+                calories: Math.round(selectedQuickItem.calories_per_unit * ratio),
+                protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
+                carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
+                fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
             });
 
             if (result) {
@@ -472,7 +482,10 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         {quickItems.map((item) => (
                                             <button
                                                 key={item.id}
-                                                onClick={() => setSelectedQuickItem(item)}
+                                                onClick={() => {
+                                                    setSelectedQuickItem(item);
+                                                    setQuantity((item.serving_size || 1).toString());
+                                                }}
                                                 className={`w-full p-4 rounded-xl text-left transition-all duration-200 ${selectedQuickItem?.id === item.id
                                                     ? 'bg-primary-50 border-2 border-primary-600'
                                                     : 'bg-neutral-50 border-2 border-transparent hover:bg-neutral-100'
@@ -482,7 +495,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                 <div className="flex gap-3 text-xs text-neutral-600">
                                                     <span>{item.calories_per_unit} cal</span>
                                                     <span>{item.protein_per_unit}g protein</span>
-                                                    <span>per {item.default_unit}</span>
+                                                    <span>per {item.serving_size || 1} {item.default_unit}</span>
                                                 </div>
                                             </button>
                                         ))}
@@ -511,7 +524,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                     <div>
                                                         <div className="text-sm font-bold text-neutral-900">
                                                             {Math.round(
-                                                                selectedQuickItem.calories_per_unit * parseFloat(quantity || '0')
+                                                                selectedQuickItem.calories_per_unit * (parseFloat(quantity || '0') / (selectedQuickItem.serving_size || 1))
                                                             )}
                                                         </div>
                                                         <div className="text-xs text-neutral-600">cal</div>
@@ -519,7 +532,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                     <div>
                                                         <div className="text-sm font-bold text-neutral-900">
                                                             {Math.round(
-                                                                selectedQuickItem.protein_per_unit * parseFloat(quantity || '0')
+                                                                selectedQuickItem.protein_per_unit * (parseFloat(quantity || '0') / (selectedQuickItem.serving_size || 1))
                                                             )}g
                                                         </div>
                                                         <div className="text-xs text-neutral-600">protein</div>
@@ -527,7 +540,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                     <div>
                                                         <div className="text-sm font-bold text-neutral-900">
                                                             {Math.round(
-                                                                selectedQuickItem.carbs_per_unit * parseFloat(quantity || '0')
+                                                                selectedQuickItem.carbs_per_unit * (parseFloat(quantity || '0') / (selectedQuickItem.serving_size || 1))
                                                             )}g
                                                         </div>
                                                         <div className="text-xs text-neutral-600">carbs</div>
@@ -535,7 +548,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                     <div>
                                                         <div className="text-sm font-bold text-neutral-900">
                                                             {Math.round(
-                                                                selectedQuickItem.fat_per_unit * parseFloat(quantity || '0')
+                                                                selectedQuickItem.fat_per_unit * (parseFloat(quantity || '0') / (selectedQuickItem.serving_size || 1))
                                                             )}g
                                                         </div>
                                                         <div className="text-xs text-neutral-600">fat</div>

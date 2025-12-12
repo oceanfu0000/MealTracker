@@ -25,6 +25,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
     const [newQuickItem, setNewQuickItem] = useState({
         name: '',
         unit: 'serving',
+        servingSize: '1',
         calories: '',
         protein: '',
         carbs: '',
@@ -66,6 +67,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             user_id: userId,
             name: newQuickItem.name,
             default_unit: newQuickItem.unit,
+            serving_size: parseFloat(newQuickItem.servingSize || '1'),
             calories_per_unit: parseInt(newQuickItem.calories),
             protein_per_unit: parseFloat(newQuickItem.protein),
             carbs_per_unit: parseFloat(newQuickItem.carbs || '0'),
@@ -75,7 +77,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         if (result) {
             loadQuickItems();
             setShowAddQuickItem(false);
-            setNewQuickItem({ name: '', unit: 'serving', calories: '', protein: '', carbs: '', fat: '' });
+            setNewQuickItem({ name: '', unit: 'serving', servingSize: '1', calories: '', protein: '', carbs: '', fat: '' });
         }
     };
 
@@ -238,8 +240,24 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         value={newQuickItem.unit}
                                         onChange={(e) => setNewQuickItem({ ...newQuickItem, unit: e.target.value })}
                                         required
-                                        placeholder="scoop"
+                                        placeholder="ml"
                                     />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="label">Base Amount</label>
+                                    <input
+                                        type="number"
+                                        className="input"
+                                        value={newQuickItem.servingSize}
+                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, servingSize: e.target.value })}
+                                        required
+                                        min="0.1"
+                                        step="0.1"
+                                        placeholder="100"
+                                    />
+                                    <p className="text-[10px] text-neutral-500 mt-1">
+                                        Value for nutrition below
+                                    </p>
                                 </div>
                             </div>
 
@@ -326,7 +344,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         <div className="text-xs text-neutral-600 flex gap-3">
                                             <span>{item.calories_per_unit} cal</span>
                                             <span>{item.protein_per_unit}g protein</span>
-                                            <span>per {item.default_unit}</span>
+                                            <span>per {item.serving_size || 1} {item.default_unit}</span>
                                         </div>
                                     </div>
                                     <button

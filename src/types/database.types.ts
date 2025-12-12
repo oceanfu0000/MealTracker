@@ -49,6 +49,7 @@ export interface QuickItem {
     user_id: string;
     name: string;
     default_unit: string;
+    serving_size: number;
     calories_per_unit: number;
     protein_per_unit: number;
     carbs_per_unit: number;
