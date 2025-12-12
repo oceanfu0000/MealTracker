@@ -76,13 +76,13 @@ function App() {
             </Routes>
 
             {/* Bottom Navigation */}
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 safe-area-inset-bottom z-50">
+            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 safe-area-inset-bottom z-[100]">
                 <div className="max-w-4xl mx-auto flex">
                     <button
                         onClick={() => navigate('/')}
                         className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${!isProfilePage
-                                ? 'text-primary-600'
-                                : 'text-neutral-400 hover:text-neutral-600'
+                            ? 'text-primary-600'
+                            : 'text-neutral-400 hover:text-neutral-600'
                             }`}
                     >
                         <Home className="w-6 h-6" />
@@ -92,8 +92,8 @@ function App() {
                     <button
                         onClick={() => navigate('/profile')}
                         className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isProfilePage
-                                ? 'text-primary-600'
-                                : 'text-neutral-400 hover:text-neutral-600'
+                            ? 'text-primary-600'
+                            : 'text-neutral-400 hover:text-neutral-600'
                             }`}
                     >
                         <User className="w-6 h-6" />
