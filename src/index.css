@@ -1,108 +1,108 @@
-@import './styles/theme.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
+@layer base {
+  * {
+    @apply border-neutral-200;
+  }
+  
+  body {
+    @apply bg-neutral-50 text-neutral-900 font-sans antialiased;
+  }
 }
 
-body {
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 shadow-sm hover:shadow;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-neutral-700 border border-neutral-300 hover:bg-neutral-50 active:bg-neutral-100;
+  }
+  
+  .btn-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
+  }
+  
+  .card {
+    @apply bg-white rounded-2xl shadow-soft p-4 transition-shadow duration-200 hover:shadow-soft-lg;
+  }
+  
+  .input {
+    @apply w-full px-4 py-2.5 rounded-lg border border-neutral-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 outline-none transition-all duration-200;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-neutral-700 mb-1.5;
+  }
+  
+  .progress-bar {
+    @apply h-2 rounded-full overflow-hidden bg-neutral-200;
+  }
+  
+  .progress-fill {
+    @apply h-full transition-all duration-300 rounded-full;
+  }
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-    margin: 0;
-    font-weight: 600;
-    color: var(--text-primary);
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
 
-p {
-    color: var(--text-secondary);
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Mobile First Container */
-.app-container {
-    max-width: 480px;
-    /* Mobile width constraint */
-    margin: 0 auto;
-    min-height: 100vh;
-    padding: 1rem;
-    padding-top: 5rem;
-    /* Space for sticky header */
-    position: relative;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-/* Button Component Styles */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-md);
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    border: none;
-    outline: none;
+::-webkit-scrollbar-thumb {
+  background: theme('colors.neutral.300');
+  border-radius: 4px;
 }
 
-.btn-primary {
-    background: var(--text-accent);
-    color: var(--bg-deep);
-    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.neutral.400');
 }
 
-.btn-primary:hover {
-    filter: brightness(1.1);
-    box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.btn-secondary {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
 }
 
-.btn-secondary:hover {
-    background: var(--glass-highlight);
+/* Loading spinner */
+.spinner {
+  border: 2px solid theme('colors.neutral.200');
+  border-top-color: theme('colors.primary.600');
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 0.6s linear infinite;
 }
 
-.btn-ghost {
-    background: transparent;
-    color: var(--text-secondary);
-}
-
-.btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
-}
-
-.btn-sm {
-    height: 2rem;
-    padding: 0 0.75rem;
-    font-size: 0.875rem;
-}
-
-.btn-md {
-    height: 2.5rem;
-    padding: 0 1rem;
-    font-size: 1rem;
-}
-
-.btn-lg {
-    height: 3rem;
-    padding: 0 1.5rem;
-    font-size: 1.125rem;
-}
-
-.btn-icon {
-    height: 2.5rem;
-    width: 2.5rem;
-    padding: 0.5rem;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

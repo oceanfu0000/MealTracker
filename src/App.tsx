@@ -1,79 +1,106 @@
-import { useState } from 'react';
-import { StickyHeader } from './components/ui/StickyHeader';
-import { MealLogger } from './features/meals/MealLogger';
-import { QuickItemsList } from './features/quick-add/QuickItemsList';
-import { AddItemPopup } from './features/quick-add/AddItemPopup';
-import { MealList } from './features/meals/MealList';
-import { useDashboardData } from './hooks/useDashboardData';
-import { QuickItem } from './services/quickItems';
-import { MealService } from './services/meals';
-
-import { ParticleBackground } from './components/ui/ParticleBackground';
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { Home, User } from 'lucide-react';
+import { useAuth } from './hooks/useAuth';
+import { useStore } from './store';
+import { getProfile, getNutritionTargets } from './lib/api';
+import AuthPage from './pages/AuthPage';
+import HomePage from './pages/HomePage';
+import ProfilePage from './pages/ProfilePage';
+import ProfileSetup from './components/ProfileSetup';
 
 function App() {
-    const { meals, quickItems, totals, targets, userId, refreshMeals } = useDashboardData();
-    const [selectedQuickItem, setSelectedQuickItem] = useState<QuickItem | null>(null);
+    const { user, loading: authLoading } = useAuth();
+    const { profile, nutritionTargets, setProfile, setNutritionTargets } = useStore();
+    const [initializing, setInitializing] = useState(true);
+    const navigate = useNavigate();
+    const location = useLocation();
 
-    const handleQuickItemClick = (item: QuickItem) => {
-        setSelectedQuickItem(item);
-    };
+    useEffect(() => {
+        if (authLoading) return;
 
-    const handleQuickItemConfirm = async (item: QuickItem, quantity: number) => {
-        try {
-            await MealService.addMeal({
-                user_id: userId,
-                name: item.name,
-                calories: Math.round(item.default_calories * quantity),
-                protein: Math.round(item.default_protein * quantity),
-                created_at: new Date().toISOString()
-            });
-            refreshMeals();
-        } catch (err) {
-            console.error(err);
-            alert('Failed to add item');
+        if (user) {
+            loadUserData();
+        } else {
+            setInitializing(false);
         }
+    }, [user, authLoading]);
+
+    const loadUserData = async () => {
+        if (!user) return;
+
+        const [profileData, targetsData] = await Promise.all([
+            getProfile(user.id),
+            getNutritionTargets(user.id),
+        ]);
+
+        setProfile(profileData);
+        setNutritionTargets(targetsData);
+        setInitializing(false);
     };
+
+    if (authLoading || initializing) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+                <div className="text-center">
+                    <div className="spinner mx-auto mb-4" style={{ width: '40px', height: '40px' }} />
+                    <p className="text-neutral-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Not authenticated
+    if (!user) {
+        return <AuthPage />;
+    }
+
+    // Need profile setup
+    if (!profile || !nutritionTargets) {
+        return (
+            <ProfileSetup
+                userId={user.id}
+                onComplete={() => loadUserData()}
+            />
+        );
+    }
+
+    const isProfilePage = location.pathname === '/profile';
 
     return (
-        <div className="app-container pb-24">
-            <ParticleBackground />
-            <StickyHeader
-                calories={totals.calories}
-                protein={totals.protein}
-                targets={targets}
-            />
+        <div className="min-h-screen">
+            <Routes>
+                <Route path="/" element={<HomePage userId={user.id} />} />
+                <Route path="/profile" element={<ProfilePage userId={user.id} />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
 
-            <div className="space-y-8 animate-fade-in">
+            {/* Bottom Navigation */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 safe-area-inset-bottom z-50">
+                <div className="max-w-4xl mx-auto flex">
+                    <button
+                        onClick={() => navigate('/')}
+                        className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${!isProfilePage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                            }`}
+                    >
+                        <Home className="w-6 h-6" />
+                        <span className="text-xs font-medium">Home</span>
+                    </button>
 
-                {/* Quick Add Section */}
-                <section>
-                    <h2 className="text-lg font-semibold mb-3 px-1 text-slate-200">Quick Add</h2>
-                    <QuickItemsList items={quickItems} onAdd={handleQuickItemClick} />
-                </section>
-
-                {/* Meal Logging Section */}
-                <section>
-                    <div className="flex justify-between items-center mb-3 px-1">
-                        <h2 className="text-lg font-semibold text-slate-200">Log Meal</h2>
-                        <span className="text-xs text-sky-400">AI Powered</span>
-                    </div>
-                    <MealLogger userId={userId} onLogComplete={refreshMeals} />
-                </section>
-
-                {/* Today's Log */}
-                <section>
-                    <h2 className="text-lg font-semibold mb-3 px-1 text-slate-200">Today's Log</h2>
-                    <MealList meals={meals} />
-                </section>
-
-            </div>
-
-            <AddItemPopup
-                item={selectedQuickItem}
-                isOpen={!!selectedQuickItem}
-                onClose={() => setSelectedQuickItem(null)}
-                onConfirm={handleQuickItemConfirm}
-            />
+                    <button
+                        onClick={() => navigate('/profile')}
+                        className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isProfilePage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                            }`}
+                    >
+                        <User className="w-6 h-6" />
+                        <span className="text-xs font-medium">Profile</span>
+                    </button>
+                </div>
+            </nav>
         </div>
     );
 }
