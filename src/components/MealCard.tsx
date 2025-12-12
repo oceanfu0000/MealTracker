@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pencil, Trash2, ImageIcon } from 'lucide-react';
+import { Trash2, ImageIcon } from 'lucide-react';
 import type { MealLog } from '../types';
 import { deleteMeal } from '../lib/api';
 
