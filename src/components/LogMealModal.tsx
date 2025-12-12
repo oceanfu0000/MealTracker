@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { X, Camera, Upload, Loader2, Search } from 'lucide-react';
-import { insertMeal, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
+import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
 import type { QuickItem } from '../types';
 
 interface LogMealModalProps {
@@ -29,6 +29,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         carbs: '',
         fat: '',
     });
+    const [saveAsQuickAdd, setSaveAsQuickAdd] = useState(false);
 
     // Search tab
     const [searchText, setSearchText] = useState('');
@@ -153,6 +154,20 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             });
 
             if (result) {
+                // Save as quick add item if requested
+                if (saveAsQuickAdd) {
+                    await insertQuickItem({
+                        user_id: userId,
+                        name: manualForm.description,
+                        default_unit: 'serving',
+                        serving_size: 1,
+                        calories_per_unit: parseInt(manualForm.calories),
+                        protein_per_unit: parseFloat(manualForm.protein),
+                        carbs_per_unit: parseFloat(manualForm.carbs),
+                        fat_per_unit: parseFloat(manualForm.fat),
+                    });
+                }
+
                 onMealLogged();
                 onClose();
             } else {
@@ -447,6 +462,19 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         placeholder="10"
                                     />
                                 </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="saveAsQuickAdd"
+                                    className="checkbox"
+                                    checked={saveAsQuickAdd}
+                                    onChange={(e) => setSaveAsQuickAdd(e.target.checked)}
+                                />
+                                <label htmlFor="saveAsQuickAdd" className="text-sm text-neutral-600 cursor-pointer select-none">
+                                    Save as Quick Add item
+                                </label>
                             </div>
 
                             <button
