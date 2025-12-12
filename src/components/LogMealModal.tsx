@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { X, Camera, Upload, Loader2 } from 'lucide-react';
-import { insertMeal, analyzeMealImage, compressImage, fetchQuickItems } from '../lib/api';
+import { X, Camera, Upload, Loader2, Search } from 'lucide-react';
+import { insertMeal, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
 import type { QuickItem } from '../types';
 
 interface LogMealModalProps {
@@ -9,7 +9,7 @@ interface LogMealModalProps {
     onMealLogged: () => void;
 }
 
-type Tab = 'camera' | 'manual' | 'quick';
+type Tab = 'camera' | 'search' | 'manual' | 'quick';
 
 export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealModalProps) {
     const [activeTab, setActiveTab] = useState<Tab>('camera');
@@ -29,6 +29,9 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         carbs: '',
         fat: '',
     });
+
+    // Search tab
+    const [searchText, setSearchText] = useState('');
 
     // Quick items tab
     const [quickItems, setQuickItems] = useState<QuickItem[]>([]);
@@ -52,11 +55,19 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         if (!imageFile) return;
 
         setAnalyzing(true);
+
         try {
+            // Compress image before sending
             const compressed = await compressImage(imageFile);
-            const analysis = await analyzeMealImage(compressed);
+
+            // Extract base64 from data URL (remove "data:image/jpeg;base64," prefix)
+            const base64 = compressed.split(',')[1];
+
+            // Call the meal analysis API
+            const analysis = await analyzeMealImage(base64);
 
             if (analysis) {
+                // Populate the manual form with the analysis
                 setManualForm({
                     description: analysis.description,
                     calories: analysis.calories.toString(),
@@ -66,12 +77,55 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 });
                 setActiveTab('manual');
             } else {
-                alert('Failed to analyze meal. Please enter manually.');
+                // If API returns null
+                console.warn('Meal analysis returned null. Falling back to manual input.');
                 setActiveTab('manual');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error analyzing meal:', error);
-            alert('Failed to analyze meal. Please enter manually.');
+
+            // Optional: show user-friendly error message
+            alert(
+                error?.message
+                    ? `Meal analysis failed: ${error.message}. Please enter manually.`
+                    : 'Failed to analyze meal. Please enter manually.'
+            );
+
+            setActiveTab('manual');
+        } finally {
+            setAnalyzing(false);
+        }
+    };
+
+    const handleSearchAnalyze = async () => {
+        if (!searchText.trim()) return;
+
+        setAnalyzing(true);
+
+        try {
+            const analysis = await analyzeMealByText(searchText);
+
+            if (analysis) {
+                // Populate the manual form with the analysis
+                setManualForm({
+                    description: analysis.description,
+                    calories: analysis.calories.toString(),
+                    protein: analysis.protein.toString(),
+                    carbs: analysis.carbs.toString(),
+                    fat: analysis.fat.toString(),
+                });
+                setActiveTab('manual');
+            } else {
+                console.warn('Meal analysis returned null. Falling back to manual input.');
+                setActiveTab('manual');
+            }
+        } catch (error: any) {
+            console.error('Error analyzing meal by text:', error);
+            alert(
+                error?.message
+                    ? `Meal analysis failed: ${error.message}. Please enter manually.`
+                    : 'Failed to analyze meal. Please enter manually.'
+            );
             setActiveTab('manual');
         } finally {
             setAnalyzing(false);
@@ -154,7 +208,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center p-0 md:p-4">
             <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-2xl max-h-[90vh] md:max-h-[80vh] overflow-hidden flex flex-col animate-fade-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-neutral-200">
@@ -171,6 +225,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 <div className="flex border-b border-neutral-200">
                     {[
                         { key: 'camera' as const, label: 'Photo', icon: Camera },
+                        { key: 'search' as const, label: 'Search', icon: Search },
                         { key: 'manual' as const, label: 'Manual', icon: Upload },
                         { key: 'quick' as const, label: 'Quick Add', icon: null },
                     ].map((tab) => (
@@ -181,8 +236,8 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                 if (tab.key === 'quick') loadQuickItems();
                             }}
                             className={`flex-1 py-3 px-4 font-medium transition-colors ${activeTab === tab.key
-                                    ? 'text-primary-600 border-b-2 border-primary-600'
-                                    : 'text-neutral-600 hover:text-neutral-900'
+                                ? 'text-primary-600 border-b-2 border-primary-600'
+                                : 'text-neutral-600 hover:text-neutral-900'
                                 }`}
                         >
                             <div className="flex items-center justify-center gap-2">
@@ -260,6 +315,45 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Search Tab */}
+                    {activeTab === 'search' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="label">Food or Dish Name</label>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={searchText}
+                                    onChange={(e) => setSearchText(e.target.value)}
+                                    placeholder="e.g., teh c peng kosong, nasi lemak, chicken rice"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !analyzing) {
+                                            handleSearchAnalyze();
+                                        }
+                                    }}
+                                />
+                                <p className="text-sm text-neutral-500 mt-2">
+                                    Enter any food or dish name and we'll estimate the nutrition info using AI
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={handleSearchAnalyze}
+                                disabled={analyzing || !searchText.trim()}
+                                className="w-full btn btn-primary py-3"
+                            >
+                                {analyzing ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Analyzing with AI...
+                                    </span>
+                                ) : (
+                                    'Analyze Meal'
+                                )}
+                            </button>
                         </div>
                     )}
 
@@ -380,8 +474,8 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                 key={item.id}
                                                 onClick={() => setSelectedQuickItem(item)}
                                                 className={`w-full p-4 rounded-xl text-left transition-all duration-200 ${selectedQuickItem?.id === item.id
-                                                        ? 'bg-primary-50 border-2 border-primary-600'
-                                                        : 'bg-neutral-50 border-2 border-transparent hover:bg-neutral-100'
+                                                    ? 'bg-primary-50 border-2 border-primary-600'
+                                                    : 'bg-neutral-50 border-2 border-transparent hover:bg-neutral-100'
                                                     }`}
                                             >
                                                 <div className="font-medium text-neutral-900 mb-1">{item.name}</div>

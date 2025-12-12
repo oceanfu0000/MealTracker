@@ -9,12 +9,18 @@ import type { MealLog } from '../types';
 
 interface HomePageProps {
     userId: string;
+    onModalChange?: (isOpen: boolean) => void;
 }
 
-export default function HomePage({ userId }: HomePageProps) {
+export default function HomePage({ userId, onModalChange }: HomePageProps) {
     const [meals, setMeals] = useState<MealLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [showLogModal, setShowLogModal] = useState(false);
+
+    const handleModalChange = (isOpen: boolean) => {
+        setShowLogModal(isOpen);
+        onModalChange?.(isOpen);
+    };
 
     const { selectedDate, setDailyTotals } = useStore();
 
@@ -34,7 +40,7 @@ export default function HomePage({ userId }: HomePageProps) {
     }, [userId, selectedDate]);
 
     return (
-        <div className="min-h-screen bg-neutral-50 pb-24">
+        <div className="min-h-screen bg-neutral-50 pb-32">
             <DailyHeader />
 
             <div className="max-w-4xl mx-auto p-4">
@@ -68,7 +74,7 @@ export default function HomePage({ userId }: HomePageProps) {
                                     Start tracking your nutrition by logging your first meal
                                 </p>
                                 <button
-                                    onClick={() => setShowLogModal(true)}
+                                    onClick={() => handleModalChange(true)}
                                     className="btn btn-primary"
                                 >
                                     Log Your First Meal
@@ -90,19 +96,21 @@ export default function HomePage({ userId }: HomePageProps) {
             </div>
 
             {/* Floating Action Button */}
-            <button
-                onClick={() => setShowLogModal(true)}
-                className="fixed bottom-20 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg hover:shadow-xl hover:bg-primary-700 active:scale-95 transition-all duration-200 flex items-center justify-center z-40"
-                aria-label="Log meal"
-            >
-                <Plus className="w-6 h-6" />
-            </button>
+            {!showLogModal && (
+                <button
+                    onClick={() => handleModalChange(true)}
+                    className="fixed bottom-20 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg hover:shadow-xl hover:bg-primary-700 active:scale-95 transition-all duration-200 flex items-center justify-center z-40"
+                    aria-label="Log meal"
+                >
+                    <Plus className="w-6 h-6" />
+                </button>
+            )}
 
             {/* Log Meal Modal */}
             {showLogModal && (
                 <LogMealModal
                     userId={userId}
-                    onClose={() => setShowLogModal(false)}
+                    onClose={() => handleModalChange(false)}
                     onMealLogged={loadMeals}
                 />
             )}

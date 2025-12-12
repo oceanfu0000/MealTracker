@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Home, User } from 'lucide-react';
+import { Home, User, Clock } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useStore } from './store';
 import { getProfile, getNutritionTargets } from './lib/api';
 import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
+import HistoryPage from './pages/HistoryPage';
 import ProfileSetup from './components/ProfileSetup';
 
 function App() {
     const { user, loading: authLoading } = useAuth();
     const { profile, nutritionTargets, setProfile, setNutritionTargets } = useStore();
     const [initializing, setInitializing] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -66,41 +68,56 @@ function App() {
     }
 
     const isProfilePage = location.pathname === '/profile';
+    const isHistoryPage = location.pathname === '/history';
 
     return (
         <div className="min-h-screen">
             <Routes>
-                <Route path="/" element={<HomePage userId={user.id} />} />
+                <Route path="/" element={<HomePage userId={user.id} onModalChange={setIsModalOpen} />} />
+                <Route path="/history" element={<HistoryPage userId={user.id} />} />
                 <Route path="/profile" element={<ProfilePage userId={user.id} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
 
-            {/* Bottom Navigation */}
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 safe-area-inset-bottom z-[100]">
-                <div className="max-w-4xl mx-auto flex">
-                    <button
-                        onClick={() => navigate('/')}
-                        className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${!isProfilePage
-                            ? 'text-primary-600'
-                            : 'text-neutral-400 hover:text-neutral-600'
-                            }`}
-                    >
-                        <Home className="w-6 h-6" />
-                        <span className="text-xs font-medium">Home</span>
-                    </button>
+            {/* Bottom Navigation - Hidden when modal is open */}
+            {!isModalOpen && (
+                <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 safe-area-inset-bottom">
+                    <div className="max-w-4xl mx-auto flex">
+                        <button
+                            onClick={() => navigate('/')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${!isProfilePage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                                }`}
+                        >
+                            <Home className="w-6 h-6" />
+                            <span className="text-xs font-medium">Home</span>
+                        </button>
 
-                    <button
-                        onClick={() => navigate('/profile')}
-                        className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isProfilePage
-                            ? 'text-primary-600'
-                            : 'text-neutral-400 hover:text-neutral-600'
-                            }`}
-                    >
-                        <User className="w-6 h-6" />
-                        <span className="text-xs font-medium">Profile</span>
-                    </button>
-                </div>
-            </nav>
+                        <button
+                            onClick={() => navigate('/history')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isHistoryPage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                                }`}
+                        >
+                            <Clock className="w-6 h-6" />
+                            <span className="text-xs font-medium">History</span>
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/profile')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isProfilePage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                                }`}
+                        >
+                            <User className="w-6 h-6" />
+                            <span className="text-xs font-medium">Profile</span>
+                        </button>
+                    </div>
+                </nav>
+            )}
         </div>
     );
 }

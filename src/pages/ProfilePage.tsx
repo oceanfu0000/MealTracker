@@ -117,7 +117,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
     };
 
     return (
-        <div className="min-h-screen bg-neutral-50 pb-24">
+        <div className="min-h-screen bg-neutral-50 pb-32">
             {/* Header */}
             <div className="bg-gradient-to-br from-primary-600 to-primary-700 text-white p-6">
                 <div className="max-w-4xl mx-auto">

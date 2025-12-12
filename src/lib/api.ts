@@ -305,12 +305,8 @@ export async function getActivityForDate(userId: string, date: Date): Promise<Ma
         .select('*')
         .eq('user_id', userId)
         .eq('activity_date', dateStr)
-        .single();
-
-    if (error && error.code === 'PGRST116') {
-        // No activity found
-        return null;
-    }
+        .eq('activity_date', dateStr)
+        .maybeSingle();
 
     if (error) {
         console.error('Error fetching activity:', error);
@@ -342,54 +338,134 @@ export async function upsertActivity(activity: InsertManualActivity & { user_id:
 export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysis | null> {
     try {
         const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-
         if (!openaiKey) {
             console.error('OpenAI API key not configured');
             return null;
         }
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${openaiKey}`,
             },
             body: JSON.stringify({
-                model: 'gpt-4-vision-preview',
-                messages: [
+                model: 'gpt-4.1',
+                max_output_tokens: 300,
+                input: [
                     {
                         role: 'user',
                         content: [
                             {
-                                type: 'text',
-                                text: 'Analyze this meal and provide nutrition estimates. Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.',
+                                type: 'input_text',
+                                text: 'Analyze this meal and provide nutrition estimates. Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.'
                             },
                             {
-                                type: 'image_url',
-                                image_url: {
-                                    url: imageBase64,
-                                },
-                            },
-                        ],
-                    },
-                ],
-                max_tokens: 500,
+                                type: 'input_image',
+                                image_url: `data:image/jpeg;base64,${imageBase64}`,
+                            }
+                        ]
+                    }
+                ]
             }),
         });
 
         if (!response.ok) {
-            throw new Error(`OpenAI API error: ${response.statusText}`);
+            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
+            const errorMessage = errorData.error?.message || response.statusText;
+            console.error('OpenAI API Error:', errorData);
+            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
         }
 
         const result = await response.json();
-        const content = result.choices[0]?.message?.content;
 
-        if (!content) {
-            throw new Error('No response from OpenAI');
+        // console.log('OpenAI API Response:', JSON.stringify(result, null, 2));
+
+        // Try multiple ways to extract content from the response
+        let content = '';
+
+        // Try result.output_text first
+        if (result.output_text) {
+            content = result.output_text.trim();
         }
 
-        // Parse JSON from response
-        const analysis = JSON.parse(content);
+        // Try result.output array
+        if (!content && Array.isArray(result.output) && result.output.length > 0) {
+            // Check first item in output array
+            const firstOutput = result.output[0];
+            console.log('First output item:', JSON.stringify(firstOutput, null, 2));
+
+            // Try different possible structures
+            if (firstOutput.text) {
+                content = firstOutput.text;
+            } else if (firstOutput.content) {
+                // Check if content is an array (new API structure)
+                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
+                    const firstContent = firstOutput.content[0];
+                    if (firstContent.text) {
+                        content = firstContent.text;
+                    } else if (typeof firstContent === 'string') {
+                        content = firstContent;
+                    }
+                } else if (typeof firstOutput.content === 'string') {
+                    content = firstOutput.content;
+                }
+            } else if (firstOutput.type === 'output_text' && firstOutput.text) {
+                content = firstOutput.text;
+            }
+
+            // If still no content, try concatenating all output items
+            if (!content) {
+                content = result.output
+                    .map((item: any) => {
+                        if (typeof item === 'string') return item;
+                        if (item.text) return item.text;
+                        // Handle nested content array
+                        if (Array.isArray(item.content)) {
+                            return item.content
+                                .map((c: any) => c.text || c)
+                                .join('\n');
+                        }
+                        if (item.content) return item.content;
+                        return '';
+                    })
+                    .join('\n')
+                    .trim();
+            }
+        }
+
+        // console.log('Extracted content:', content);
+        // console.log('Content type:', typeof content);
+
+        // Ensure content is a string before using .match()
+        // If content is an object, it might already be the parsed JSON we need
+        let contentStr: string;
+        if (typeof content === 'string') {
+            contentStr = content;
+        } else if (typeof content === 'object' && content !== null) {
+            // If it's already an object, try to use it directly
+            const analysis = content as any;
+            return {
+                description: analysis.description || 'Unknown meal',
+                calories: Math.round(analysis.calories || 0),
+                protein: Math.round(analysis.protein || 0),
+                carbs: Math.round(analysis.carbs || 0),
+                fat: Math.round(analysis.fat || 0),
+                confidence: analysis.confidence || 0.5,
+            };
+        } else {
+            console.warn('OpenAI returned empty or invalid output. Full response:', result);
+            throw new Error('No valid response from OpenAI');
+        }
+
+        // Extract JSON safely (remove extra text if needed)
+        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.warn('Could not find JSON in model output:', content);
+            throw new Error('OpenAI returned invalid JSON');
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
 
         return {
             description: analysis.description || 'Unknown meal',
@@ -399,9 +475,135 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
             fat: Math.round(analysis.fat || 0),
             confidence: analysis.confidence || 0.5,
         };
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error analyzing meal:', error);
-        return null;
+        throw new Error(error.message || 'Error analyzing meal');
+    }
+}
+
+export async function analyzeMealByText(mealDescription: string): Promise<MealAnalysis | null> {
+    try {
+        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+        if (!openaiKey) {
+            console.error('OpenAI API key not configured');
+            return null;
+        }
+
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: 'gpt-4.1',
+                max_output_tokens: 300,
+                input: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: `Analyze this meal/food item and provide nutrition estimates: "${mealDescription}". Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Malaysian/Asian foods, use typical serving sizes.`
+                            }
+                        ]
+                    }
+                ]
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
+            const errorMessage = errorData.error?.message || response.statusText;
+            console.error('OpenAI API Error:', errorData);
+            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+        }
+
+        const result = await response.json();
+        // console.log('OpenAI Text Analysis Response:', JSON.stringify(result, null, 2));
+
+        // Extract content using the same logic as analyzeMealImage
+        let content = '';
+
+        if (result.output_text) {
+            content = result.output_text.trim();
+        }
+
+        if (!content && Array.isArray(result.output) && result.output.length > 0) {
+            const firstOutput = result.output[0];
+
+            if (firstOutput.text) {
+                content = firstOutput.text;
+            } else if (firstOutput.content) {
+                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
+                    const firstContent = firstOutput.content[0];
+                    if (firstContent.text) {
+                        content = firstContent.text;
+                    } else if (typeof firstContent === 'string') {
+                        content = firstContent;
+                    }
+                } else if (typeof firstOutput.content === 'string') {
+                    content = firstOutput.content;
+                }
+            }
+
+            if (!content) {
+                content = result.output
+                    .map((item: any) => {
+                        if (typeof item === 'string') return item;
+                        if (item.text) return item.text;
+                        if (Array.isArray(item.content)) {
+                            return item.content
+                                .map((c: any) => c.text || c)
+                                .join('\n');
+                        }
+                        if (item.content) return item.content;
+                        return '';
+                    })
+                    .join('\n')
+                    .trim();
+            }
+        }
+
+        // console.log('Extracted content:', content);
+
+        let contentStr: string;
+        if (typeof content === 'string') {
+            contentStr = content;
+        } else if (typeof content === 'object' && content !== null) {
+            const analysis = content as any;
+            return {
+                description: analysis.description || mealDescription,
+                calories: Math.round(analysis.calories || 0),
+                protein: Math.round(analysis.protein || 0),
+                carbs: Math.round(analysis.carbs || 0),
+                fat: Math.round(analysis.fat || 0),
+                confidence: analysis.confidence || 0.5,
+            };
+        } else {
+            console.warn('OpenAI returned empty or invalid output. Full response:', result);
+            throw new Error('No valid response from OpenAI');
+        }
+
+        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.warn('Could not find JSON in model output:', content);
+            throw new Error('OpenAI returned invalid JSON');
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
+
+        return {
+            description: analysis.description || mealDescription,
+            calories: Math.round(analysis.calories || 0),
+            protein: Math.round(analysis.protein || 0),
+            carbs: Math.round(analysis.carbs || 0),
+            fat: Math.round(analysis.fat || 0),
+            confidence: analysis.confidence || 0.5,
+        };
+    } catch (error: any) {
+        console.error('Error analyzing meal by text:', error);
+        throw new Error(error.message || 'Error analyzing meal');
     }
 }
 
@@ -445,3 +647,92 @@ export function compressImage(file: File, maxWidth: number = 800): Promise<strin
         reader.readAsDataURL(file);
     });
 }
+
+// ============================================
+// ACCESS CODES (SECURITY)
+// ============================================
+
+export async function verifyAccessCode(code: string): Promise<boolean> {
+    const { data, error } = await supabase
+        .from('access_codes')
+        .select('id')
+        .eq('code', code)
+        .single();
+
+    if (error || !data) {
+        return false;
+    }
+
+    return true;
+}
+
+// ============================================
+// HISTORY & REPORTING
+// ============================================
+
+export interface DailySummary {
+    date: Date;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    mealCount: number;
+}
+
+export async function fetchDailyHistory(userId: string, days: number = 7): Promise<DailySummary[]> {
+    // Get date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days + 1);
+
+    // Fetch all meals in range
+    const { data, error } = await supabase
+        .from('meal_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .gte('logged_at', startDate.toISOString())
+        .lte('logged_at', endDate.toISOString())
+        .order('logged_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching history:', error);
+        return [];
+    }
+
+    const meals = data as MealLog[];
+
+    // Group by date
+    const historyMap = new Map<string, DailySummary>();
+
+    // Initialize all days in range with 0
+    for (let i = 0; i < days; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        historyMap.set(dateStr, {
+            date: d,
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            mealCount: 0
+        });
+    }
+
+    // Aggregate meals
+    meals?.forEach(meal => {
+        const dateStr = new Date(meal.logged_at).toISOString().split('T')[0];
+        const daySummary = historyMap.get(dateStr);
+        if (daySummary) {
+            daySummary.calories += meal.calories;
+            daySummary.protein += meal.protein;
+            daySummary.carbs += meal.carbs;
+            daySummary.fat += meal.fat;
+            daySummary.mealCount += 1;
+        }
+    });
+
+    // Convert map to array and sort by date descending (newest first)
+    return Array.from(historyMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+

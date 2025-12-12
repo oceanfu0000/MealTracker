@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { LogIn, UserPlus, Loader2 } from 'lucide-react';
+import { LogIn, UserPlus, Loader2, KeyRound } from 'lucide-react';
+import { verifyAccessCode } from '../lib/api';
 
 type AuthMode = 'login' | 'register';
 
@@ -10,6 +11,7 @@ export default function AuthPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [accessCode, setAccessCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -28,6 +30,14 @@ export default function AuthPage() {
 
                 if (password.length < 6) {
                     setError('Password must be at least 6 characters');
+                    setLoading(false);
+                    return;
+                }
+
+                // Verify access code
+                const isCodeValid = await verifyAccessCode(accessCode);
+                if (!isCodeValid) {
+                    setError('Invalid registration code');
                     setLoading(false);
                     return;
                 }
@@ -75,8 +85,8 @@ export default function AuthPage() {
                         <button
                             onClick={() => setMode('login')}
                             className={`flex-1 py-2 rounded-md font-medium transition-all duration-200 ${mode === 'login'
-                                    ? 'bg-white text-primary-600 shadow-sm'
-                                    : 'text-neutral-600 hover:text-neutral-900'
+                                ? 'bg-white text-primary-600 shadow-sm'
+                                : 'text-neutral-600 hover:text-neutral-900'
                                 }`}
                         >
                             Login
@@ -84,8 +94,8 @@ export default function AuthPage() {
                         <button
                             onClick={() => setMode('register')}
                             className={`flex-1 py-2 rounded-md font-medium transition-all duration-200 ${mode === 'register'
-                                    ? 'bg-white text-primary-600 shadow-sm'
-                                    : 'text-neutral-600 hover:text-neutral-900'
+                                ? 'bg-white text-primary-600 shadow-sm'
+                                : 'text-neutral-600 hover:text-neutral-900'
                                 }`}
                         >
                             Register
@@ -142,6 +152,29 @@ export default function AuthPage() {
                             </div>
                         )}
 
+                        {mode === 'register' && (
+                            <div>
+                                <label className="label">Registration Code</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <KeyRound className="h-5 w-5 text-neutral-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        className="input pl-10"
+                                        value={accessCode}
+                                        onChange={(e) => setAccessCode(e.target.value)}
+                                        required
+                                        placeholder="Enter access code"
+                                        disabled={loading}
+                                    />
+                                </div>
+                                <p className="text-xs text-neutral-500 mt-1">
+                                    This app is invite-only. Please enter your registration code.
+                                </p>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
                             disabled={loading}
@@ -186,7 +219,7 @@ export default function AuthPage() {
                 <div className="mt-8 text-center text-xs text-neutral-400">
                     <p>By continuing, you agree to our Terms of Service and Privacy Policy</p>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
