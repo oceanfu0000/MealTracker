@@ -62,7 +62,7 @@ A mobile-first meal tracking web application with AI-powered nutrition analysis,
 1. **Clone the repository**
 
 ```bash
-cd MealTracker2
+cd MealTracker
 ```
 
 2. **Install dependencies**
@@ -143,7 +143,7 @@ The app will open at `http://localhost:3000`
 ## Project Structure
 
 ```
-MealTracker2/
+MealTracker/
 ├── src/
 │   ├── components/       # Reusable React components
 │   │   ├── DailyHeader.tsx
