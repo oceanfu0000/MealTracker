@@ -379,7 +379,7 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
 
         const result = await response.json();
 
-        // console.log('OpenAI API Response:', JSON.stringify(result, null, 2));
+
 
         // Try multiple ways to extract content from the response
         let content = '';
@@ -393,7 +393,7 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
         if (!content && Array.isArray(result.output) && result.output.length > 0) {
             // Check first item in output array
             const firstOutput = result.output[0];
-            console.log('First output item:', JSON.stringify(firstOutput, null, 2));
+
 
             // Try different possible structures
             if (firstOutput.text) {
@@ -434,8 +434,7 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
             }
         }
 
-        // console.log('Extracted content:', content);
-        // console.log('Content type:', typeof content);
+
 
         // Ensure content is a string before using .match()
         // If content is an object, it might already be the parsed JSON we need
@@ -520,7 +519,7 @@ export async function analyzeMealByText(mealDescription: string): Promise<MealAn
         }
 
         const result = await response.json();
-        // console.log('OpenAI Text Analysis Response:', JSON.stringify(result, null, 2));
+
 
         // Extract content using the same logic as analyzeMealImage
         let content = '';
@@ -565,7 +564,7 @@ export async function analyzeMealByText(mealDescription: string): Promise<MealAn
             }
         }
 
-        // console.log('Extracted content:', content);
+
 
         let contentStr: string;
         if (typeof content === 'string') {

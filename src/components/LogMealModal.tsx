@@ -189,13 +189,6 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         const qty = parseFloat(quantity);
 
         try {
-            console.log('Debug Calculation:', {
-                item: selectedQuickItem,
-                qty,
-                servingSize: selectedQuickItem.serving_size,
-                ratio: qty / (selectedQuickItem.serving_size || 1)
-            });
-
             const servingSize = selectedQuickItem.serving_size || 1;
             const ratio = qty / servingSize;
 
