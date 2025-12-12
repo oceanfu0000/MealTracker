@@ -1,3 +1,24 @@
+# Meal Tracker AI - Quick Start (TL;DR)
+
+1.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+2.  **Setup Environment:**
+    Copy `.env.example` to `.env` and fill in your keys:
+    ```bash
+    cp .env.example .env
+    ```
+    *(Required: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_OPENAI_API_KEY`)*
+
+3.  **Run Development Server:**
+    ```bash
+    npm run dev
+    ```
+    Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
 # Meal Tracker - Smart Nutrition Tracking
 
 A mobile-first meal tracking web application with AI-powered nutrition analysis, built with React, TypeScript, Tailwind CSS, and Supabase.
@@ -8,7 +29,7 @@ A mobile-first meal tracking web application with AI-powered nutrition analysis,
 - 📊 **Daily Nutrition Tracking**: Track calories, protein, carbs, and fat with visual progress bars
 - ⚡ **Quick Add Items**: Save frequently eaten items for instant logging
 - 📱 **Mobile-First Design**: Responsive, touch-friendly interface optimized for phones
-- 🔐 **Apple Sign-In**: Secure authentication with Apple ID
+
 - 📈 **Personalized Targets**: Automatic nutrition goal calculation based on your profile
 - 🏃 **Manual Activity Tracking**: Optionally log steps, active calories, and workouts
 - 💾 **Real-time Sync**: All data stored securely in Supabase with RLS
@@ -29,7 +50,7 @@ A mobile-first meal tracking web application with AI-powered nutrition analysis,
 - Node.js 18+ and npm
 - Supabase account ([create one free](https://supabase.com))
 - OpenAI API key ([get one here](https://platform.openai.com/api-keys))
-- Apple Developer account (for Apple Sign-In)
+
 
 ### Installation
 
@@ -49,10 +70,7 @@ npm install
 
 - Create a new project in [Supabase Dashboard](https://app.supabase.com)
 - Go to SQL Editor and run the migration script from `supabase_migration.sql`
-- Enable Apple Auth:
-  - Go to Authentication > Providers
-  - Enable Apple provider
-  - Add your Apple Developer credentials
+
 
 4. **Configure environment variables**
 
@@ -82,7 +100,7 @@ The app will open at `http://localhost:3000`
 
 ### First Time Setup
 
-1. Sign in with Apple
+1. Sign in
 2. Complete your profile (age, weight, height, etc.)
 3. Review your calculated nutrition targets
 4. Start logging meals!
@@ -222,9 +240,7 @@ Modify the calculation logic in `src/lib/api.ts` → `calculateNutritionTargets(
 - Ensure you have API credits available
 - Try with a smaller image
 
-**Apple Sign-In fails**
-- Verify Apple provider is enabled in Supabase
-- Check redirect URLs are configured correctly
+
 
 ## Contributing
 
