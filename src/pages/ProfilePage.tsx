@@ -31,7 +31,6 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         fat: '',
     });
 
-    const [activity, setActivity] = useState<ManualActivity | null>(null);
     const [activityForm, setActivityForm] = useState({
         steps: '',
         activeEnergy: '',
@@ -51,7 +50,6 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
 
     const loadTodayActivity = async () => {
         const todayActivity = await getActivityForDate(userId, new Date());
-        setActivity(todayActivity);
         if (todayActivity) {
             setActivityForm({
                 steps: todayActivity.steps.toString(),
@@ -102,7 +100,6 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             });
 
             if (result) {
-                setActivity(result);
                 alert('Activity saved!');
             }
         } catch (error) {
