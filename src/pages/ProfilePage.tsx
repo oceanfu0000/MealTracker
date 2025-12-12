@@ -9,7 +9,7 @@ import {
     getActivityForDate,
     upsertActivity,
 } from '../lib/api';
-import type { QuickItem, ManualActivity } from '../types';
+import type { QuickItem } from '../types';
 import { format } from 'date-fns';
 
 interface ProfilePageProps {
