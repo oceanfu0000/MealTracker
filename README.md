@@ -17,6 +17,11 @@
     ```
     Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+> [!NOTE]
+> **For Fun & Personal Use Only** 🧪
+> This project was built as a fun experiment for personal tracking!
+> Please be aware that the AI food analysis relies on the OpenAI API. If you are on a restricted plan, you may encounter strict daily limits (e.g., only a few image analyses per day). Plan your meals (and your credits) accordingly! 🍎
+
 ---
 
 # Meal Tracker - Smart Nutrition Tracking
@@ -70,6 +75,10 @@ npm install
 
 - Create a new project in [Supabase Dashboard](https://app.supabase.com)
 - Go to SQL Editor and run the migration script from `supabase_migration.sql`
+- **Configure Registration Code**:
+    - Open `access_codes_migration.sql`
+    - Change `'apple'` to your desired access code (e.g., `'secret123'`)
+    - Run this script in the Supabase SQL Editor too
 
 
 4. **Configure environment variables**
