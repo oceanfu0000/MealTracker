@@ -19,8 +19,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     // Camera/photo tab
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
-    const cameraInputRef = useRef<HTMLInputElement>(null);
-    const galleryInputRef = useRef<HTMLInputElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Manual tab
     const [manualForm, setManualForm] = useState({
@@ -273,15 +272,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     {activeTab === 'camera' && (
                         <div className="space-y-4">
                             <input
-                                ref={cameraInputRef}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                onChange={handleImageSelect}
-                                className="hidden"
-                            />
-                            <input
-                                ref={galleryInputRef}
+                                ref={fileInputRef}
                                 type="file"
                                 accept="image/*"
                                 onChange={handleImageSelect}
@@ -289,33 +280,16 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                             />
 
                             {!selectedImage ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <button
-                                        onClick={() => cameraInputRef.current?.click()}
-                                        className="aspect-[4/3] md:aspect-square border-2 border-dashed border-neutral-300 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-primary-500 hover:bg-primary-50/50 transition-all duration-200 group"
-                                    >
-                                        <div className="p-4 bg-neutral-100 rounded-full group-hover:bg-primary-100 transition-colors">
-                                            <Camera className="w-8 h-8 text-neutral-600 group-hover:text-primary-600" />
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="font-medium text-neutral-900">Take Photo</p>
-                                            <p className="text-xs text-neutral-500">Using camera</p>
-                                        </div>
-                                    </button>
-
-                                    <button
-                                        onClick={() => galleryInputRef.current?.click()}
-                                        className="aspect-[4/3] md:aspect-square border-2 border-dashed border-neutral-300 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-primary-500 hover:bg-primary-50/50 transition-all duration-200 group"
-                                    >
-                                        <div className="p-4 bg-neutral-100 rounded-full group-hover:bg-primary-100 transition-colors">
-                                            <Upload className="w-8 h-8 text-neutral-600 group-hover:text-primary-600" />
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="font-medium text-neutral-900">Upload Image</p>
-                                            <p className="text-xs text-neutral-500">From gallery</p>
-                                        </div>
-                                    </button>
-                                </div>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full aspect-[4/3] border-2 border-dashed border-neutral-300 rounded-2xl flex flex-col items-center justify-center gap-3 hover:border-primary-500 hover:bg-primary-50/50 transition-all duration-200"
+                                >
+                                    <Camera className="w-12 h-12 text-neutral-400" />
+                                    <div className="text-center">
+                                        <p className="font-medium text-neutral-900">Add Meal Photo</p>
+                                        <p className="text-sm text-neutral-500">Take a photo or upload</p>
+                                    </div>
+                                </button>
                             ) : (
                                 <div className="space-y-4">
                                     <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-100">
