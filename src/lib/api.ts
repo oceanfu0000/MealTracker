@@ -277,6 +277,13 @@ export async function findExistingGroupByName(
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
+    console.log('findExistingGroupByName query:', {
+        userId,
+        groupName,
+        startOfDay: startOfDay.toISOString(),
+        endOfDay: endOfDay.toISOString()
+    });
+
     const { data, error } = await supabase
         .from('meal_logs')
         .select('meal_group_id')
@@ -286,6 +293,8 @@ export async function findExistingGroupByName(
         .gte('logged_at', startOfDay.toISOString())
         .lte('logged_at', endOfDay.toISOString())
         .limit(1);
+
+    console.log('findExistingGroupByName result:', { data, error });
 
     if (error || !data || data.length === 0) {
         return null;

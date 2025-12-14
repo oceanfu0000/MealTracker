@@ -11,7 +11,6 @@ interface GroupedMealCardProps {
     onDelete: () => void;
     otherUngroupedMeals?: GroupedMeal[]; // Other ungrouped meals that can be combined
     existingGroups?: GroupedMeal[]; // Existing meal groups to add to
-    userId: string;
 }
 
 // Single meal item within a group
@@ -125,7 +124,7 @@ function MealItem({ meal, onDelete, isGrouped }: { meal: MealLog; onDelete: () =
     );
 }
 
-export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals = [], existingGroups = [], userId }: GroupedMealCardProps) {
+export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals = [], existingGroups = [] }: GroupedMealCardProps) {
     const [expanded, setExpanded] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [ungroupingAll, setUngroupingAll] = useState(false);
@@ -253,8 +252,13 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
 
         setGrouping(true);
         try {
+            // Use the user_id from the meal itself (more reliable)
+            const mealUserId = group.meals[0].user_id;
+            
             // Check if a group with this name already exists today
-            const existingGroup = await findExistingGroupByName(userId, selectedGroupName, selectedDate);
+            const existingGroup = await findExistingGroupByName(mealUserId, selectedGroupName, selectedDate);
+            
+            console.log('Finding existing group:', { mealUserId, selectedGroupName, selectedDate, existingGroup });
             
             const allMealIds = [group.meals[0].id, ...selectedMealsToGroup];
             const result = await addMealsToGroup(allMealIds, selectedGroupName, existingGroup?.groupId);

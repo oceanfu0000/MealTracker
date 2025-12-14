@@ -101,7 +101,6 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                                             onDelete={loadMeals}
                                             otherUngroupedMeals={otherUngroupedMeals}
                                             existingGroups={existingGroups}
-                                            userId={userId}
                                         />
                                     );
                                 })}
