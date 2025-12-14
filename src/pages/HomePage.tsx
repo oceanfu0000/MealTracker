@@ -89,12 +89,19 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                                         g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
                                     );
                                     
+                                    // Get existing groups (exclude current group if it's a group)
+                                    const existingGroups = groupedMeals.filter(
+                                        g => g.groupId !== null && g.groupId !== group.groupId
+                                    );
+                                    
                                     return (
                                         <GroupedMealCard
                                             key={group.groupId || group.meals[0].id}
                                             group={group}
                                             onDelete={loadMeals}
                                             otherUngroupedMeals={otherUngroupedMeals}
+                                            existingGroups={existingGroups}
+                                            userId={userId}
                                         />
                                     );
                                 })}

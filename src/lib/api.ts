@@ -265,12 +265,53 @@ export async function addMealToGroup(
     return true;
 }
 
-// Add multiple meals to a group
+// Find existing meal group by name for a given day
+export async function findExistingGroupByName(
+    userId: string,
+    groupName: string,
+    date: Date
+): Promise<{ groupId: string; mealCount: number } | null> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+        .from('meal_logs')
+        .select('meal_group_id')
+        .eq('user_id', userId)
+        .eq('meal_group_name', groupName)
+        .not('meal_group_id', 'is', null)
+        .gte('logged_at', startOfDay.toISOString())
+        .lte('logged_at', endOfDay.toISOString())
+        .limit(1);
+
+    if (error || !data || data.length === 0) {
+        return null;
+    }
+
+    const groupId = (data[0] as any).meal_group_id;
+
+    // Count meals in this group
+    const { count } = await supabase
+        .from('meal_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('meal_group_id', groupId);
+
+    return {
+        groupId: groupId,
+        mealCount: count || 0
+    };
+}
+
+// Add multiple meals to a group (creates new or adds to existing)
 export async function addMealsToGroup(
     mealIds: string[], 
-    groupName: string
-): Promise<boolean> {
-    const groupId = generateMealGroupId();
+    groupName: string,
+    existingGroupId?: string
+): Promise<{ success: boolean; isNewGroup: boolean; totalItems: number }> {
+    const groupId = existingGroupId || generateMealGroupId();
     
     const { error } = await supabase
         .from('meal_logs')
@@ -283,10 +324,20 @@ export async function addMealsToGroup(
 
     if (error) {
         console.error('Error adding meals to group:', error);
-        return false;
+        return { success: false, isNewGroup: !existingGroupId, totalItems: 0 };
     }
 
-    return true;
+    // Count total items in the group now
+    const { count } = await supabase
+        .from('meal_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('meal_group_id', groupId);
+
+    return { 
+        success: true, 
+        isNewGroup: !existingGroupId,
+        totalItems: count || mealIds.length
+    };
 }
 
 // Remove a meal from its group (ungroup)
@@ -302,6 +353,25 @@ export async function removeMealFromGroup(mealId: string): Promise<boolean> {
 
     if (error) {
         console.error('Error removing meal from group:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Ungroup all meals in a group (removes group association but keeps the meals)
+export async function ungroupAllMeals(groupId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('meal_logs')
+        // @ts-expect-error - Supabase type inference issue
+        .update({ 
+            meal_group_id: null, 
+            meal_group_name: null 
+        })
+        .eq('meal_group_id', groupId);
+
+    if (error) {
+        console.error('Error ungrouping meals:', error);
         return false;
     }
 
