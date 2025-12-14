@@ -3,7 +3,7 @@ import { X, Camera, Upload, Loader2, Search, Calendar } from 'lucide-react';
 import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
-import { InsertMealLog, QuickItem } from '../types';
+import { QuickItem } from '../types';
 
 interface LogMealModalProps {
     userId: string;

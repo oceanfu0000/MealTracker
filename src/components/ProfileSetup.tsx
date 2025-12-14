@@ -71,6 +71,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
                 body_fat_percentage: formData.bodyFat ? parseFloat(formData.bodyFat) : null,
                 training_frequency: parseInt(formData.trainingFrequency),
                 goal: formData.goal,
+                has_seen_disclaimer: true,
             });
 
             // Save nutrition targets

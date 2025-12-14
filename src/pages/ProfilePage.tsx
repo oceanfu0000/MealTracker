@@ -172,7 +172,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                 // Keep existing values
                 age: profile.age,
                 height_cm: profile.height_cm,
-                body_fat_percentage: profile.body_fat_percentage
+                body_fat_percentage: profile.body_fat_percentage,
+                has_seen_disclaimer: profile.has_seen_disclaimer,
             });
 
             // 2. Recalculate Targets

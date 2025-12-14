@@ -14,7 +14,6 @@ import type {
     InsertManualActivity,
     Profile,
     InsertProfile,
-    UpdateProfile,
 } from '../types';
 import { format } from 'date-fns';
 
@@ -53,8 +52,8 @@ export async function upsertProfile(profile: InsertProfile): Promise<Profile | n
 }
 
 export async function markDisclaimerSeen(userId: string): Promise<boolean> {
-    const { error } = await supabase
-        .from('profiles')
+    const { error } = await (supabase
+        .from('profiles') as any)
         .update({ has_seen_disclaimer: true })
         .eq('id', userId);
 

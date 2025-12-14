@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Eye, Zap, X, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Shield, Eye, Zap, CheckCircle } from 'lucide-react';
 
 interface DisclaimerModalProps {
     onAccept: () => void;
