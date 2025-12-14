@@ -15,7 +15,7 @@ interface GroupedMealCardProps {
 }
 
 // Single meal item within a group
-function MealItem({ meal, onDelete, isGrouped, onUngroup }: { meal: MealLog; onDelete: () => void; isGrouped: boolean; onUngroup?: () => void }) {
+function MealItem({ meal, onDelete, isGrouped }: { meal: MealLog; onDelete: () => void; isGrouped: boolean }) {
     const [deleting, setDeleting] = useState(false);
     const [ungrouping, setUngrouping] = useState(false);
     const { confirm, ConfirmDialog } = useConfirm();
