@@ -13,6 +13,7 @@ export interface Profile {
     body_fat_percentage: number | null;
     training_frequency: number;
     goal: UserGoal;
+    has_seen_disclaimer: boolean;
     created_at: string;
     updated_at: string;
 }

@@ -3,18 +3,20 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import { Home, User, Clock } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useStore } from './store';
-import { getProfile, getNutritionTargets } from './lib/api';
+import { getProfile, getNutritionTargets, markDisclaimerSeen } from './lib/api';
 import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import ProfileSetup from './components/ProfileSetup';
+import DisclaimerModal from './components/DisclaimerModal';
 
 function App() {
     const { user, loading: authLoading } = useAuth();
     const { profile, nutritionTargets, setProfile, setNutritionTargets } = useStore();
     const [initializing, setInitializing] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [showDisclaimer, setShowDisclaimer] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -38,7 +40,26 @@ function App() {
 
         setProfile(profileData);
         setNutritionTargets(targetsData);
+        
+        // Check if user needs to see disclaimer
+        if (profileData && !profileData.has_seen_disclaimer) {
+            setShowDisclaimer(true);
+        }
+        
         setInitializing(false);
+    };
+
+    const handleDisclaimerAccept = async () => {
+        if (!user) return;
+        
+        const success = await markDisclaimerSeen(user.id);
+        if (success) {
+            setShowDisclaimer(false);
+            // Update local profile state
+            if (profile) {
+                setProfile({ ...profile, has_seen_disclaimer: true });
+            }
+        }
     };
 
     if (authLoading || initializing) {
@@ -72,6 +93,11 @@ function App() {
 
     return (
         <div className="min-h-screen">
+            {/* Disclaimer Modal for first-time users */}
+            {showDisclaimer && (
+                <DisclaimerModal onAccept={handleDisclaimerAccept} />
+            )}
+            
             <Routes>
                 <Route path="/" element={<HomePage userId={user.id} onModalChange={setIsModalOpen} />} />
                 <Route path="/history" element={<HistoryPage userId={user.id} />} />

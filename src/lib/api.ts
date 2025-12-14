@@ -14,6 +14,7 @@ import type {
     InsertManualActivity,
     Profile,
     InsertProfile,
+    UpdateProfile,
 } from '../types';
 import { format } from 'date-fns';
 
@@ -49,6 +50,20 @@ export async function upsertProfile(profile: InsertProfile): Promise<Profile | n
     }
 
     return data;
+}
+
+export async function markDisclaimerSeen(userId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('profiles')
+        .update({ has_seen_disclaimer: true })
+        .eq('id', userId);
+
+    if (error) {
+        console.error('Error marking disclaimer as seen:', error);
+        return false;
+    }
+
+    return true;
 }
 
 export async function getNutritionTargets(userId: string): Promise<NutritionTargets | null> {
