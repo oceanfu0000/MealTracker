@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ArrowLeft, Calendar, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchDailyHistoryByRange, fetchMealsForDate, DailySummary } from '../lib/api';
-import type { MealLog } from '../types';
+import { fetchDailyHistoryByRange, fetchMealsForDate, groupMealsForDisplay, DailySummary } from '../lib/api';
+import type { MealLog, GroupedMeal } from '../types';
 import { useStore } from '../store';
-import MealCard from '../components/MealCard';
+import GroupedMealCard from '../components/GroupedMealCard';
 
 interface HistoryPageProps {
     userId: string;
@@ -38,7 +38,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
 
     // Expansion state
     const [expandedDate, setExpandedDate] = useState<string | null>(null);
-    const [dayMeals, setDayMeals] = useState<MealLog[]>([]);
+    const [groupedDayMeals, setGroupedDayMeals] = useState<GroupedMeal[]>([]);
     const [loadingMeals, setLoadingMeals] = useState(false);
 
     // Cache for loaded meals to avoid re-fetching
@@ -51,7 +51,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
     const loadHistory = async (start: string, end: string) => {
         setLoading(true);
         setExpandedDate(null);
-        setDayMeals([]);
+        setGroupedDayMeals([]);
         const data = await fetchDailyHistoryByRange(userId, new Date(start), new Date(end));
         setHistory(data);
         setLoading(false);
@@ -106,7 +106,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
         const dateStr = date.toISOString();
         if (expandedDate === dateStr) {
             setExpandedDate(null);
-            setDayMeals([]);
+            setGroupedDayMeals([]);
             return;
         }
 
@@ -116,14 +116,14 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
         const cacheKey = date.toISOString().split('T')[0];
         const cachedMeals = mealsCache.get(cacheKey);
         if (cachedMeals) {
-            setDayMeals(cachedMeals);
+            setGroupedDayMeals(groupMealsForDisplay(cachedMeals));
             return;
         }
 
         setLoadingMeals(true);
         try {
             const meals = await fetchMealsForDate(userId, date);
-            setDayMeals(meals);
+            setGroupedDayMeals(groupMealsForDisplay(meals));
             // Store in cache
             setMealsCache(prev => new Map(prev).set(cacheKey, meals));
         } catch (error) {
@@ -143,7 +143,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
         });
         // Reload meals and history
         const meals = await fetchMealsForDate(userId, date);
-        setDayMeals(meals);
+        setGroupedDayMeals(groupMealsForDisplay(meals));
         setMealsCache(prev => new Map(prev).set(cacheKey, meals));
         loadHistory(appliedRange.start, appliedRange.end);
     };
@@ -352,22 +352,33 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                 <div className="flex justify-center py-8">
                                                     <div className="spinner" />
                                                 </div>
-                                            ) : dayMeals.length === 0 ? (
+                                            ) : groupedDayMeals.length === 0 ? (
                                                 <div className="text-center py-6 text-neutral-500 italic">
                                                     No meals found for this day.
                                                 </div>
                                             ) : (
                                                 <div className="space-y-3">
-                                                    {dayMeals.map((meal) => (
-                                                        <MealCard
-                                                            key={meal.id}
-                                                            meal={meal}
-                                                            onDelete={() => {
-                                                                // Refresh both current meals and history stats
-                                                                refreshDay(day.date);
-                                                            }}
-                                                        />
-                                                    ))}
+                                                    {groupedDayMeals.map((group) => {
+                                                        // Get other ungrouped meals for grouping feature
+                                                        const otherUngroupedMeals = groupedDayMeals.filter(
+                                                            g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
+                                                        );
+                                                        
+                                                        // Get existing groups
+                                                        const existingGroups = groupedDayMeals.filter(
+                                                            g => g.groupId !== null && g.groupId !== group.groupId
+                                                        );
+
+                                                        return (
+                                                            <GroupedMealCard
+                                                                key={group.groupId || group.meals[0].id}
+                                                                group={group}
+                                                                onDelete={() => refreshDay(day.date)}
+                                                                otherUngroupedMeals={otherUngroupedMeals}
+                                                                existingGroups={existingGroups}
+                                                            />
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>

@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Trash2, ImageIcon, ChevronDown, ChevronUp, Layers, X, Plus, Check, Unlink } from 'lucide-react';
+import { Trash2, ImageIcon, ChevronDown, ChevronUp, Layers, X, Plus, Check, Unlink, Pencil } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import type { GroupedMeal, MealLog } from '../types';
 import { deleteMeal, deleteMealGroup, addMealsToGroup, findExistingGroupByName, removeMealFromGroup, ungroupAllMeals, MEAL_GROUP_OPTIONS } from '../lib/api';
 import { useConfirm } from './ConfirmDialog';
 import { useStore } from '../store';
+import EditMealModal from './EditMealModal';
 
 interface GroupedMealCardProps {
     group: GroupedMeal;
@@ -14,7 +15,7 @@ interface GroupedMealCardProps {
 }
 
 // Single meal item within a group
-function MealItem({ meal, onDelete, isGrouped }: { meal: MealLog; onDelete: () => void; isGrouped: boolean }) {
+function MealItem({ meal, onDelete, isGrouped, onEdit }: { meal: MealLog; onDelete: () => void; isGrouped: boolean; onEdit: () => void }) {
     const [deleting, setDeleting] = useState(false);
     const [ungrouping, setUngrouping] = useState(false);
     const { confirm, ConfirmDialog } = useConfirm();
@@ -98,6 +99,14 @@ function MealItem({ meal, onDelete, isGrouped }: { meal: MealLog; onDelete: () =
                         {isGrouped && (
                             <div className="flex items-center gap-0.5">
                                 <button
+                                    onClick={onEdit}
+                                    className="p-1.5 text-neutral-400 hover:text-primary-600 transition-colors"
+                                    aria-label="Edit item"
+                                    title="Edit item"
+                                >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
                                     onClick={handleUngroup}
                                     disabled={ungrouping}
                                     className="p-1.5 text-neutral-400 hover:text-orange-600 transition-colors disabled:opacity-50"
@@ -128,6 +137,7 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
     const [expanded, setExpanded] = useState(false);
     const [deleting, setDeleting] = useState(false);
     const [ungroupingAll, setUngroupingAll] = useState(false);
+    const [editingMeal, setEditingMeal] = useState<MealLog | null>(null);
     const [showGroupModal, setShowGroupModal] = useState(false);
     const [selectedGroupName, setSelectedGroupName] = useState('');
     const [selectedMealsToGroup, setSelectedMealsToGroup] = useState<string[]>([]);
@@ -551,6 +561,14 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                                         <span>Group</span>
                                     </button>
                                     <button
+                                        onClick={() => setEditingMeal(meal)}
+                                        className="p-1.5 text-neutral-400 hover:text-primary-600 transition-colors"
+                                        aria-label="Edit meal"
+                                        title="Edit meal"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
                                         onClick={handleDeleteGroup}
                                         disabled={deleting}
                                         className="p-1.5 text-neutral-400 hover:text-red-600 transition-colors disabled:opacity-50"
@@ -582,6 +600,15 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                         </div>
                     </div>
                 </div>
+
+                {/* Edit Meal Modal for ungrouped meals */}
+                {editingMeal && (
+                    <EditMealModal
+                        meal={editingMeal}
+                        onClose={() => setEditingMeal(null)}
+                        onSave={onDelete}
+                    />
+                )}
             </>
         );
     }
@@ -664,7 +691,7 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                             </div>
                         </div>
                         <p className="text-xs text-neutral-400 mb-2">
-                            💡 Click the unlink icon on each item to remove it from this group
+                            💡 Click the pencil to edit, unlink to remove from group
                         </p>
                         {group.meals.map((meal) => (
                             <MealItem
@@ -672,9 +699,19 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                                 meal={meal}
                                 onDelete={onDelete}
                                 isGrouped={true}
+                                onEdit={() => setEditingMeal(meal)}
                             />
                         ))}
                     </div>
+                )}
+
+                {/* Edit Meal Modal */}
+                {editingMeal && (
+                    <EditMealModal
+                        meal={editingMeal}
+                        onClose={() => setEditingMeal(null)}
+                        onSave={onDelete}
+                    />
                 )}
             </div>
         </>
