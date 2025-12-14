@@ -9,7 +9,8 @@ import {
     ChevronLeft,
     CheckCircle,
     Utensils,
-    Sparkles
+    Sparkles,
+    Users
 } from 'lucide-react';
 
 interface UserGuideModalProps {
@@ -57,6 +58,14 @@ const guideSteps: GuideStep[] = [
         example: "Ideas: \"Protein shake - 1 scoop\" or \"Milk - per 100ml\" or \"Boiled egg - 1 pc\"",
         tip: "You can edit quantity each time you log, so set the base portion and adjust as needed!",
         color: "from-green-500 to-emerald-500"
+    },
+    {
+        icon: <Users className="w-12 h-12" />,
+        title: "👥 Group Meal Sharing",
+        description: "Eating with friends or family? No problem! When logging a meal, check the 'Shared group meal' option to split the nutrition fairly.",
+        example: "Sharing a pizza with 3 friends? Enter the total pizza's nutrition, set 4 people, and adjust if you ate more (1.5) or less (0.75) than average!",
+        tip: "The app will automatically calculate your portion. Perfect for steamboat, BBQ, or any shared dining! 🍕",
+        color: "from-indigo-500 to-violet-500"
     },
     {
         icon: <Target className="w-12 h-12" />,

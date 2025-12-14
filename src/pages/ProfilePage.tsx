@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw } from 'lucide-react';
+import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw, HelpCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../store';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '../components/ConfirmDialog';
+import UserGuideModal from '../components/UserGuideModal';
 import {
     fetchQuickItems,
     insertQuickItem,
@@ -63,6 +64,9 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         trainingFreq: '3'
     });
     const [calculatingtargets, setCalculatingTargets] = useState(false);
+
+    // User Guide
+    const [showUserGuide, setShowUserGuide] = useState(false);
 
     useEffect(() => {
         loadQuickItems();
@@ -652,6 +656,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                     </div>
                 </div>
 
+                {/* View Guide Button */}
+                <button
+                    onClick={() => setShowUserGuide(true)}
+                    className="w-full btn btn-secondary flex items-center justify-center gap-2 py-3"
+                >
+                    <HelpCircle className="w-4 h-4" />
+                    View User Guide
+                </button>
+
                 {/* Sign Out */}
                 <button
                     onClick={handleSignOut}
@@ -661,6 +674,11 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                     Sign Out
                 </button>
             </div>
+
+            {/* User Guide Modal */}
+            {showUserGuide && (
+                <UserGuideModal onComplete={() => setShowUserGuide(false)} />
+            )}
         </div>
         </>
     );

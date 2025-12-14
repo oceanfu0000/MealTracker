@@ -34,6 +34,11 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     });
     const [saveAsQuickAdd, setSaveAsQuickAdd] = useState(false);
 
+    // Group meal sharing
+    const [isGroupMeal, setIsGroupMeal] = useState(false);
+    const [groupSize, setGroupSize] = useState('2');
+    const [portionAte, setPortionAte] = useState('1');
+
     // Search tab
     const [searchText, setSearchText] = useState('');
 
@@ -150,16 +155,35 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             const isToday = loggedDate === todayStr;
             const finalLoggedAt = isToday ? new Date().toISOString() : new Date(`${loggedDate}T12:00:00`).toISOString();
 
+            // Calculate final nutrition values (accounting for group sharing if enabled)
+            let finalCalories = parseInt(manualForm.calories);
+            let finalProtein = parseFloat(manualForm.protein);
+            let finalCarbs = parseFloat(manualForm.carbs);
+            let finalFat = parseFloat(manualForm.fat);
+            let finalDescription = manualForm.description;
+
+            if (isGroupMeal) {
+                const numPeople = parseFloat(groupSize || '2');
+                const myPortion = parseFloat(portionAte || '1');
+                const portionMultiplier = myPortion / numPeople;
+                
+                finalCalories = Math.round(finalCalories * portionMultiplier);
+                finalProtein = Number((finalProtein * portionMultiplier).toFixed(1));
+                finalCarbs = Number((finalCarbs * portionMultiplier).toFixed(1));
+                finalFat = Number((finalFat * portionMultiplier).toFixed(1));
+                finalDescription = `${manualForm.description} (${myPortion}/${numPeople} share)`;
+            }
+
             const result = await insertMeal({
                 user_id: userId,
                 meal_type: selectedImage ? 'camera' : 'manual',
-                description: manualForm.description,
+                description: finalDescription,
                 image_url: imageUrl,
                 quantity: 1,
-                calories: parseInt(manualForm.calories),
-                protein: parseFloat(manualForm.protein),
-                carbs: parseFloat(manualForm.carbs),
-                fat: parseFloat(manualForm.fat),
+                calories: finalCalories,
+                protein: finalProtein,
+                carbs: finalCarbs,
+                fat: finalFat,
                 logged_at: finalLoggedAt,
             });
 
@@ -483,6 +507,90 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         placeholder="10"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Group Meal Sharing */}
+                            <div className="border rounded-xl p-4 space-y-3 bg-neutral-50">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="isGroupMeal"
+                                        className="checkbox"
+                                        checked={isGroupMeal}
+                                        onChange={(e) => setIsGroupMeal(e.target.checked)}
+                                    />
+                                    <label htmlFor="isGroupMeal" className="text-sm font-medium text-neutral-700 cursor-pointer select-none">
+                                        🍽️ Shared group meal
+                                    </label>
+                                </div>
+
+                                {isGroupMeal && (
+                                    <div className="space-y-3 pt-2">
+                                        <p className="text-xs text-neutral-500">
+                                            Enter the total meal's nutrition above, then specify how many people shared it and how much you ate.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="label text-xs">Total people sharing</label>
+                                                <input
+                                                    type="number"
+                                                    step="1"
+                                                    min="2"
+                                                    className="input"
+                                                    value={groupSize}
+                                                    onChange={(e) => setGroupSize(e.target.value)}
+                                                    placeholder="2"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="label text-xs">Your portion (person equiv.)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.25"
+                                                    min="0.25"
+                                                    className="input"
+                                                    value={portionAte}
+                                                    onChange={(e) => setPortionAte(e.target.value)}
+                                                    placeholder="1"
+                                                />
+                                                <p className="text-xs text-neutral-400 mt-1">e.g., 1.5 = ate 1.5 person's share</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Preview of your portion */}
+                                        {manualForm.calories && (
+                                            <div className="p-3 bg-white rounded-lg border border-neutral-200">
+                                                <p className="text-xs font-medium text-neutral-600 mb-2">Your portion:</p>
+                                                <div className="grid grid-cols-4 gap-2 text-center">
+                                                    <div>
+                                                        <div className="text-sm font-bold text-primary-600">
+                                                            {Math.round((parseInt(manualForm.calories || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1'))}
+                                                        </div>
+                                                        <div className="text-xs text-neutral-500">cal</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-primary-600">
+                                                            {((parseFloat(manualForm.protein || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1')).toFixed(1)}g
+                                                        </div>
+                                                        <div className="text-xs text-neutral-500">protein</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-primary-600">
+                                                            {((parseFloat(manualForm.carbs || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1')).toFixed(1)}g
+                                                        </div>
+                                                        <div className="text-xs text-neutral-500">carbs</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-primary-600">
+                                                            {((parseFloat(manualForm.fat || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1')).toFixed(1)}g
+                                                        </div>
+                                                        <div className="text-xs text-neutral-500">fat</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex items-center gap-2">
