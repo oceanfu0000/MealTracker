@@ -10,12 +10,14 @@ import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import ProfileSetup from './components/ProfileSetup';
 import DisclaimerModal from './components/DisclaimerModal';
+import UserGuideModal from './components/UserGuideModal';
 
 function App() {
     const { user, loading: authLoading } = useAuth();
     const { profile, nutritionTargets, setProfile, setNutritionTargets } = useStore();
     const [initializing, setInitializing] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [showUserGuide, setShowUserGuide] = useState(false);
     const [showDisclaimer, setShowDisclaimer] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
@@ -41,12 +43,17 @@ function App() {
         setProfile(profileData);
         setNutritionTargets(targetsData);
         
-        // Check if user needs to see disclaimer
+        // Check if user needs to see the guide and disclaimer
         if (profileData && !profileData.has_seen_disclaimer) {
-            setShowDisclaimer(true);
+            setShowUserGuide(true);
         }
         
         setInitializing(false);
+    };
+
+    const handleGuideComplete = () => {
+        setShowUserGuide(false);
+        setShowDisclaimer(true);
     };
 
     const handleDisclaimerAccept = async () => {
@@ -93,7 +100,12 @@ function App() {
 
     return (
         <div className="min-h-screen">
-            {/* Disclaimer Modal for first-time users */}
+            {/* User Guide Modal for first-time users */}
+            {showUserGuide && (
+                <UserGuideModal onComplete={handleGuideComplete} />
+            )}
+            
+            {/* Disclaimer Modal after user guide */}
             {showDisclaimer && (
                 <DisclaimerModal onAccept={handleDisclaimerAccept} />
             )}
