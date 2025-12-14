@@ -1,15 +1,20 @@
-import { useState, useEffect } from 'react';
-import { User, LogOut, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../store';
 import {
     fetchQuickItems,
     insertQuickItem,
+    updateQuickItem,
     deleteQuickItem,
     getActivityForDate,
     upsertActivity,
+    compressImage,
+    upsertProfile,
+    calculateNutritionTargets,
+    upsertNutritionTargets
 } from '../lib/api';
-import type { QuickItem } from '../types';
+import type { QuickItem, UserGoal } from '../types';
 import { format } from 'date-fns';
 
 interface ProfilePageProps {
@@ -22,7 +27,10 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
 
     const [quickItems, setQuickItems] = useState<QuickItem[]>([]);
     const [showAddQuickItem, setShowAddQuickItem] = useState(false);
-    const [newQuickItem, setNewQuickItem] = useState({
+    const [editingQuickItem, setEditingQuickItem] = useState<QuickItem | null>(null);
+
+    // Quick Item Form State
+    const [newItemForm, setNewItemForm] = useState({
         name: '',
         unit: 'serving',
         servingSize: '1',
@@ -30,7 +38,12 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         protein: '',
         carbs: '',
         fat: '',
+        image_url: '' as string | null
     });
+
+    // Image handling
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [itemImagePreview, setItemImagePreview] = useState<string | null>(null);
 
     const [activityForm, setActivityForm] = useState({
         steps: '',
@@ -38,6 +51,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         workout: '',
     });
     const [loadingActivity, setLoadingActivity] = useState(false);
+
+    // Profile Editing
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [editProfileForm, setEditProfileForm] = useState({
+        weight: '',
+        goal: 'maintain' as UserGoal,
+        trainingFreq: '3'
+    });
+    const [calculatingtargets, setCalculatingTargets] = useState(false);
 
     useEffect(() => {
         loadQuickItems();
@@ -60,25 +82,77 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         }
     };
 
-    const handleAddQuickItem = async (e: React.FormEvent) => {
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const compressed = await compressImage(file, 400, 0.5); // 50% compression for storage efficiency
+            setItemImagePreview(compressed);
+            setNewItemForm(prev => ({ ...prev, image_url: compressed }));
+        } catch (error) {
+            console.error('Error processing image:', error);
+            alert('Failed to process image');
+        }
+    };
+
+    const resetQuickItemForm = () => {
+        setNewItemForm({
+            name: '',
+            unit: 'serving',
+            servingSize: '1',
+            calories: '',
+            protein: '',
+            carbs: '',
+            fat: '',
+            image_url: null
+        });
+        setItemImagePreview(null);
+        setEditingQuickItem(null);
+        setShowAddQuickItem(false);
+    };
+
+    const handleEditQuickItem = (item: QuickItem) => {
+        setEditingQuickItem(item);
+        setNewItemForm({
+            name: item.name,
+            unit: item.default_unit,
+            servingSize: item.serving_size.toString(),
+            calories: item.calories_per_unit.toString(),
+            protein: item.protein_per_unit.toString(),
+            carbs: item.carbs_per_unit.toString(),
+            fat: item.fat_per_unit.toString(),
+            image_url: item.image_url
+        });
+        setItemImagePreview(item.image_url);
+        setShowAddQuickItem(true);
+    };
+
+    const handleQuickItemSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const result = await insertQuickItem({
-            user_id: userId,
-            name: newQuickItem.name,
-            default_unit: newQuickItem.unit,
-            serving_size: parseFloat(newQuickItem.servingSize || '1'),
-            calories_per_unit: parseInt(newQuickItem.calories),
-            protein_per_unit: parseFloat(newQuickItem.protein),
-            carbs_per_unit: parseFloat(newQuickItem.carbs || '0'),
-            fat_per_unit: parseFloat(newQuickItem.fat || '0'),
-        });
+        const itemData = {
+            name: newItemForm.name,
+            default_unit: newItemForm.unit,
+            serving_size: parseFloat(newItemForm.servingSize || '1'),
+            calories_per_unit: parseInt(newItemForm.calories),
+            protein_per_unit: parseFloat(newItemForm.protein),
+            carbs_per_unit: parseFloat(newItemForm.carbs || '0'),
+            fat_per_unit: parseFloat(newItemForm.fat || '0'),
+            image_url: newItemForm.image_url
+        };
 
-        if (result) {
-            loadQuickItems();
-            setShowAddQuickItem(false);
-            setNewQuickItem({ name: '', unit: 'serving', servingSize: '1', calories: '', protein: '', carbs: '', fat: '' });
+        if (editingQuickItem) {
+            await updateQuickItem(editingQuickItem.id, itemData);
+        } else {
+            await insertQuickItem({
+                user_id: userId,
+                ...itemData
+            });
         }
+
+        loadQuickItems();
+        resetQuickItemForm();
     };
 
     const handleDeleteQuickItem = async (id: string) => {
@@ -118,6 +192,58 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         }
     };
 
+    const handleEditProfile = () => {
+        if (!profile) return;
+        setEditProfileForm({
+            weight: profile.weight_kg.toString(),
+            goal: profile.goal,
+            trainingFreq: profile.training_frequency.toString()
+        });
+        setShowEditProfile(true);
+    };
+
+    const handleRecalculateProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!profile) return;
+        setCalculatingTargets(true);
+
+        try {
+            // 1. Update Profile
+            await upsertProfile({
+                id: userId,
+                weight_kg: parseFloat(editProfileForm.weight),
+                goal: editProfileForm.goal,
+                training_frequency: parseInt(editProfileForm.trainingFreq),
+                // Keep existing values
+                age: profile.age,
+                height_cm: profile.height_cm,
+                body_fat_percentage: profile.body_fat_percentage
+            });
+
+            // 2. Recalculate Targets
+            const newTargets = await calculateNutritionTargets({
+                age: profile.age,
+                weight_kg: parseFloat(editProfileForm.weight),
+                height_cm: profile.height_cm,
+                body_fat_percentage: profile.body_fat_percentage,
+                training_frequency: parseInt(editProfileForm.trainingFreq),
+                goal: editProfileForm.goal
+            });
+
+            // 3. Save Targets
+            await upsertNutritionTargets(userId, newTargets);
+
+            alert('Profile and targets updated!');
+            setShowEditProfile(false);
+            window.location.reload(); // Simple reload to refresh all data stores
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            alert('Failed to update profile');
+        } finally {
+            setCalculatingTargets(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-neutral-50 pb-32">
             {/* Header */}
@@ -128,10 +254,89 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                             <User className="w-6 h-6" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold">Profile</h1>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-2xl font-bold">Profile</h1>
+                                <button
+                                    onClick={handleEditProfile}
+                                    className="p-1 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                                >
+                                    <Edit2 className="w-4 h-4 text-white" />
+                                </button>
+                            </div>
                             <p className="text-primary-100 text-sm">Manage your settings</p>
                         </div>
                     </div>
+
+                    {/* Edit Profile Modal / Form Overlay */}
+                    {showEditProfile && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-fade-in text-neutral-900">
+                            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden animate-slide-up">
+                                <div className="p-4 border-b border-neutral-200 flex justify-between items-center">
+                                    <h2 className="text-lg font-bold text-neutral-900">Edit Profile</h2>
+                                    <button onClick={() => setShowEditProfile(false)}>
+                                        <X className="w-5 h-5 text-neutral-500" />
+                                    </button>
+                                </div>
+                                <form onSubmit={handleRecalculateProfile} className="p-4 space-y-4">
+                                    <div>
+                                        <label className="label">Weight (kg)</label>
+                                        <input
+                                            type="number"
+                                            className="input"
+                                            value={editProfileForm.weight}
+                                            onChange={(e) => setEditProfileForm({ ...editProfileForm, weight: e.target.value })}
+                                            required
+                                            min="30"
+                                            max="300"
+                                            step="0.1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="label">Goal</label>
+                                        <select
+                                            className="input"
+                                            value={editProfileForm.goal}
+                                            onChange={(e) => setEditProfileForm({ ...editProfileForm, goal: e.target.value as UserGoal })}
+                                        >
+                                            <option value="cut">Lose Weight (Cut)</option>
+                                            <option value="maintain">Maintain Weight</option>
+                                            <option value="bulk">Gain Muscle (Bulk)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="label">Training Frequency (days/week)</label>
+                                        <select
+                                            className="input"
+                                            value={editProfileForm.trainingFreq}
+                                            onChange={(e) => setEditProfileForm({ ...editProfileForm, trainingFreq: e.target.value })}
+                                        >
+                                            <option value="0">Sedentary (0-1 days)</option>
+                                            <option value="2">Light (2-3 days)</option>
+                                            <option value="4">Moderate (4-5 days)</option>
+                                            <option value="6">Intense (6+ days)</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <button
+                                            type="submit"
+                                            disabled={calculatingtargets}
+                                            className="w-full btn btn-primary flex items-center justify-center gap-2"
+                                        >
+                                            {calculatingtargets ? (
+                                                'Calculating...'
+                                            ) : (
+                                                <>
+                                                    <RefreshCw className="w-4 h-4" />
+                                                    Save & Recalculate
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
 
                     {profile && nutritionTargets && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -210,24 +415,65 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-lg font-bold text-neutral-900">Quick Add Items</h2>
                         <button
-                            onClick={() => setShowAddQuickItem(!showAddQuickItem)}
+                            onClick={() => {
+                                resetQuickItemForm();
+                                setShowAddQuickItem(!showAddQuickItem);
+                            }}
                             className="btn btn-secondary flex items-center gap-2"
                         >
-                            <Plus className="w-4 h-4" />
-                            Add Item
+                            {showAddQuickItem ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                            {showAddQuickItem ? 'Cancel' : 'Add Item'}
                         </button>
                     </div>
 
                     {showAddQuickItem && (
-                        <form onSubmit={handleAddQuickItem} className="mb-6 p-4 bg-neutral-50 rounded-xl space-y-4">
+                        <form onSubmit={handleQuickItemSubmit} className="mb-6 p-4 bg-neutral-50 rounded-xl space-y-4 border border-neutral-200 animate-slide-down">
+                            <h3 className="font-semibold text-neutral-900">
+                                {editingQuickItem ? 'Edit Quick Item' : 'New Quick Item'}
+                            </h3>
+
+                            {/* Image Upload */}
+                            <div className="flex justify-center">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageSelect}
+                                    className="hidden"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="relative w-24 h-24 rounded-xl border-2 border-dashed border-neutral-300 flex flex-col items-center justify-center gap-1 hover:border-primary-500 hover:bg-primary-50 transition-colors overflow-hidden group"
+                                >
+                                    {itemImagePreview ? (
+                                        <>
+                                            <img
+                                                src={itemImagePreview}
+                                                alt="Preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Camera className="w-6 h-6 text-white" />
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Camera className="w-6 h-6 text-neutral-400" />
+                                            <span className="text-[10px] text-neutral-500">Add Photo</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="label">Name</label>
                                     <input
                                         type="text"
                                         className="input"
-                                        value={newQuickItem.name}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, name: e.target.value })}
+                                        value={newItemForm.name}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, name: e.target.value })}
                                         required
                                         placeholder="Protein Shake"
                                     />
@@ -237,8 +483,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                     <input
                                         type="text"
                                         className="input"
-                                        value={newQuickItem.unit}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, unit: e.target.value })}
+                                        value={newItemForm.unit}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, unit: e.target.value })}
                                         required
                                         placeholder="ml"
                                     />
@@ -248,8 +494,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                     <input
                                         type="number"
                                         className="input"
-                                        value={newQuickItem.servingSize}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, servingSize: e.target.value })}
+                                        value={newItemForm.servingSize}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, servingSize: e.target.value })}
                                         required
                                         min="0.1"
                                         step="0.1"
@@ -267,8 +513,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                     <input
                                         type="number"
                                         className="input"
-                                        value={newQuickItem.calories}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, calories: e.target.value })}
+                                        value={newItemForm.calories}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, calories: e.target.value })}
                                         required
                                         min="0"
                                         placeholder="120"
@@ -280,8 +526,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         type="number"
                                         step="0.1"
                                         className="input"
-                                        value={newQuickItem.protein}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, protein: e.target.value })}
+                                        value={newItemForm.protein}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, protein: e.target.value })}
                                         required
                                         min="0"
                                         placeholder="24"
@@ -293,8 +539,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         type="number"
                                         step="0.1"
                                         className="input"
-                                        value={newQuickItem.carbs}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, carbs: e.target.value })}
+                                        value={newItemForm.carbs}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, carbs: e.target.value })}
                                         min="0"
                                         placeholder="5"
                                     />
@@ -305,8 +551,8 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         type="number"
                                         step="0.1"
                                         className="input"
-                                        value={newQuickItem.fat}
-                                        onChange={(e) => setNewQuickItem({ ...newQuickItem, fat: e.target.value })}
+                                        value={newItemForm.fat}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, fat: e.target.value })}
                                         min="0"
                                         placeholder="2"
                                     />
@@ -316,13 +562,14 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setShowAddQuickItem(false)}
-                                    className="btn btn-secondary"
+                                    onClick={resetQuickItemForm}
+                                    className="btn btn-secondary flex-1"
                                 >
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn btn-primary">
-                                    Add Quick Item
+                                <button type="submit" className="btn btn-primary flex-1 flex items-center justify-center gap-2">
+                                    <Save className="w-4 h-4" />
+                                    {editingQuickItem ? 'Update Item' : 'Add Quick Item'}
                                 </button>
                             </div>
                         </form>
@@ -339,20 +586,37 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                     key={item.id}
                                     className="flex items-center justify-between p-3 bg-neutral-50 rounded-lg hover:bg-neutral-100 transition-colors"
                                 >
-                                    <div className="flex-1">
-                                        <div className="font-medium text-neutral-900">{item.name}</div>
-                                        <div className="text-xs text-neutral-600 flex gap-3">
-                                            <span>{item.calories_per_unit} cal</span>
-                                            <span>{item.protein_per_unit}g protein</span>
-                                            <span>per {item.serving_size || 1} {item.default_unit}</span>
+                                    <div className="flex-1 flex items-center gap-3">
+                                        {item.image_url && (
+                                            <img
+                                                src={item.image_url}
+                                                alt={item.name}
+                                                className="w-12 h-12 rounded-lg object-cover bg-white"
+                                            />
+                                        )}
+                                        <div>
+                                            <div className="font-medium text-neutral-900">{item.name}</div>
+                                            <div className="text-xs text-neutral-600 flex gap-3">
+                                                <span>{item.calories_per_unit} cal</span>
+                                                <span>{item.protein_per_unit}g protein</span>
+                                                <span>per {item.serving_size || 1} {item.default_unit}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => handleDeleteQuickItem(item.id)}
-                                        className="p-2 text-neutral-400 hover:text-red-600 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={() => handleEditQuickItem(item)}
+                                            className="p-2 text-neutral-400 hover:text-primary-600 transition-colors"
+                                        >
+                                            <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteQuickItem(item.id)}
+                                            className="p-2 text-neutral-400 hover:text-red-600 transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))
                         )}

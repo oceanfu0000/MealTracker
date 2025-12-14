@@ -150,7 +150,12 @@ export async function fetchMealsForDate(userId: string, date: Date): Promise<Mea
 
     const { data, error } = await supabase
         .from('meal_logs')
-        .select('*')
+        .select(`
+            *,
+            quick_items (
+                image_url
+            )
+        `)
         .eq('user_id', userId)
         .gte('logged_at', startOfDay.toISOString())
         .lte('logged_at', endOfDay.toISOString())
@@ -161,15 +166,22 @@ export async function fetchMealsForDate(userId: string, date: Date): Promise<Mea
         return [];
     }
 
-    return data || [];
+    // Map the result to flatten the quick item image into the main object if needed
+    // or just rely on the UI to look for it. Ideally we normalize it here so UI doesn't change.
+    const normalizedData = (data || []).map((meal: any) => ({
+        ...meal,
+        image_url: meal.image_url || meal.quick_items?.image_url || null
+    }));
+
+    return normalizedData as MealLog[];
 }
 
-export async function insertMeal(meal: InsertMealLog & { user_id: string }): Promise<MealLog | null> {
+export async function insertMeal(meal: InsertMealLog & { user_id: string; logged_at?: string }): Promise<MealLog | null> {
     const { data, error } = await supabase
         .from('meal_logs')
         .insert({
             ...meal,
-            logged_at: new Date().toISOString(),
+            logged_at: meal.logged_at || new Date().toISOString(),
         } as any)
         .select()
         .single();
@@ -607,7 +619,7 @@ export async function analyzeMealByText(mealDescription: string): Promise<MealAn
 }
 
 // Helper function to compress image before sending to API
-export function compressImage(file: File, maxWidth: number = 800): Promise<string> {
+export function compressImage(file: File, maxWidth: number = 800, quality: number = 0.8): Promise<string> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
 
@@ -634,7 +646,7 @@ export function compressImage(file: File, maxWidth: number = 800): Promise<strin
                 }
 
                 ctx.drawImage(img, 0, 0, width, height);
-                const compressed = canvas.toDataURL('image/jpeg', 0.8);
+                const compressed = canvas.toDataURL('image/jpeg', quality);
                 resolve(compressed);
             };
 

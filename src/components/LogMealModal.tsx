@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
-import { X, Camera, Upload, Loader2, Search } from 'lucide-react';
+import { X, Camera, Upload, Loader2, Search, Calendar } from 'lucide-react';
 import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
+import { format } from 'date-fns';
 import type { QuickItem } from '../types';
 
 interface LogMealModalProps {
@@ -15,6 +16,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     const [activeTab, setActiveTab] = useState<Tab>('camera');
     const [loading, setLoading] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
+    const [loggedDate, setLoggedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
     // Camera/photo tab
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -141,6 +143,13 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             // Upload image if exists (placeholder for real upload)
             let imageUrl = selectedImage || null;
 
+            // Determine logged_at time
+            // If the selected date is today, use current time to preserve order
+            // If it's a different date (past/future), set to noon to ensure it falls within the day regardless of timezone
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            const isToday = loggedDate === todayStr;
+            const finalLoggedAt = isToday ? new Date().toISOString() : new Date(`${loggedDate}T12:00:00`).toISOString();
+
             const result = await insertMeal({
                 user_id: userId,
                 meal_type: selectedImage ? 'camera' : 'manual',
@@ -151,6 +160,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 protein: parseFloat(manualForm.protein),
                 carbs: parseFloat(manualForm.carbs),
                 fat: parseFloat(manualForm.fat),
+                logged_at: finalLoggedAt,
             });
 
             if (result) {
@@ -165,6 +175,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                         protein_per_unit: parseFloat(manualForm.protein),
                         carbs_per_unit: parseFloat(manualForm.carbs),
                         fat_per_unit: parseFloat(manualForm.fat),
+                        image_url: null
                     });
                 }
 
@@ -192,16 +203,23 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             const servingSize = selectedQuickItem.serving_size || 1;
             const ratio = qty / servingSize;
 
+            // Date logic
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            const isToday = loggedDate === todayStr;
+            const finalLoggedAt = isToday ? new Date().toISOString() : new Date(`${loggedDate}T12:00:00`).toISOString();
+
             const result = await insertMeal({
                 user_id: userId,
                 meal_type: 'quick',
                 description: `${selectedQuickItem.name}`,
-                image_url: null,
+                image_url: null, // Don't duplicate image, use link
+                quick_item_id: selectedQuickItem.id,
                 quantity: qty,
                 calories: Math.round(selectedQuickItem.calories_per_unit * ratio),
                 protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
                 carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
                 fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
+                logged_at: finalLoggedAt,
             });
 
             if (result) {
@@ -230,7 +248,18 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             <div className="bg-white rounded-t-2xl md:rounded-2xl w-full max-w-2xl max-h-[90vh] md:max-h-[80vh] overflow-hidden flex flex-col animate-fade-in">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-                    <h2 className="text-xl font-bold text-neutral-900">Log Meal</h2>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-bold text-neutral-900">Log Meal</h2>
+                        <div className="flex items-center gap-2 bg-neutral-100 rounded-lg px-2 py-1">
+                            <Calendar className="w-4 h-4 text-neutral-500" />
+                            <input
+                                type="date"
+                                value={loggedDate}
+                                onChange={(e) => setLoggedDate(e.target.value)}
+                                className="bg-transparent text-sm font-medium text-neutral-600 outline-none"
+                            />
+                        </div>
+                    </div>
                     <button
                         onClick={onClose}
                         className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"

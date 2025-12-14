@@ -34,6 +34,7 @@ export interface MealLog {
     meal_type: MealType;
     description: string;
     image_url: string | null;
+    quick_item_id?: string | null;
     quantity: number;
     calories: number;
     protein: number;
@@ -48,6 +49,8 @@ export interface QuickItem {
     id: string;
     user_id: string;
     name: string;
+    description?: string; // Optional description
+    image_url: string | null;
     default_unit: string;
     serving_size: number;
     calories_per_unit: number;
