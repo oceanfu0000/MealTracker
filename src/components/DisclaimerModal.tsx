@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { AlertTriangle, Shield, Eye, Zap, CheckCircle } from 'lucide-react';
+import { AlertTriangle, Shield, Eye, Zap, CheckCircle, X } from 'lucide-react';
 
 interface DisclaimerModalProps {
     onAccept: () => void;
+    viewOnly?: boolean;
+    onClose?: () => void;
 }
 
-export default function DisclaimerModal({ onAccept }: DisclaimerModalProps) {
+export default function DisclaimerModal({ onAccept, viewOnly = false, onClose }: DisclaimerModalProps) {
     const [hasRead, setHasRead] = useState(false);
 
     return (
@@ -13,14 +15,28 @@ export default function DisclaimerModal({ onAccept }: DisclaimerModalProps) {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden animate-fade-in">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white/20 rounded-lg">
-                            <AlertTriangle className="w-6 h-6 text-white" />
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-white/20 rounded-lg">
+                                <AlertTriangle className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white">
+                                    {viewOnly ? 'App Disclaimer' : 'Welcome to Meal Tracker!'}
+                                </h2>
+                                <p className="text-primary-100 text-sm">
+                                    {viewOnly ? 'Important information about this app' : 'Please read before continuing'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Welcome to Meal Tracker!</h2>
-                            <p className="text-primary-100 text-sm">Please read before continuing</p>
-                        </div>
+                        {viewOnly && onClose && (
+                            <button
+                                onClick={onClose}
+                                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5 text-white" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -86,33 +102,51 @@ export default function DisclaimerModal({ onAccept }: DisclaimerModalProps) {
                         </div>
                     </div>
 
-                    {/* Acknowledgment checkbox */}
-                    <label className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg cursor-pointer hover:bg-neutral-100 transition-colors">
-                        <input
-                            type="checkbox"
-                            checked={hasRead}
-                            onChange={(e) => setHasRead(e.target.checked)}
-                            className="mt-0.5 w-5 h-5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
-                        />
-                        <span className="text-sm text-neutral-700">
-                            I have read and understood the above information
-                        </span>
-                    </label>
+                    {/* Data Retention */}
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-semibold text-red-800 text-sm">🗑️ Data Retention Policy</h4>
+                                <p className="text-xs text-red-700 mt-1">
+                                    Your data may be removed under certain circumstances: if your account has been 
+                                    <strong> inactive for an extended period</strong>, or if the database storage 
+                                    reaches its limit, <strong>older data may be deleted</strong> to make room for new entries. 
+                                    Please export or save any important meal logs locally if you need to keep them! 📋
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Acknowledgment checkbox - only show when not in viewOnly mode */}
+                    {!viewOnly && (
+                        <label className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg cursor-pointer hover:bg-neutral-100 transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={hasRead}
+                                onChange={(e) => setHasRead(e.target.checked)}
+                                className="mt-0.5 w-5 h-5 rounded border-neutral-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="text-sm text-neutral-700">
+                                I have read and understood the above information
+                            </span>
+                        </label>
+                    )}
                 </div>
 
                 {/* Footer */}
                 <div className="px-6 py-4 bg-neutral-50 border-t border-neutral-200">
                     <button
-                        onClick={onAccept}
-                        disabled={!hasRead}
+                        onClick={viewOnly ? onClose : onAccept}
+                        disabled={!viewOnly && !hasRead}
                         className={`w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
-                            hasRead
+                            viewOnly || hasRead
                                 ? 'bg-primary-600 text-white hover:bg-primary-700'
                                 : 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
                         }`}
                     >
                         <CheckCircle className="w-5 h-5" />
-                        <span>Got it, let's go!</span>
+                        <span>{viewOnly ? 'Close' : "Got it, let's go!"}</span>
                     </button>
                 </div>
             </div>

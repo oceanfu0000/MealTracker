@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw, HelpCircle } from 'lucide-react';
+import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw, HelpCircle, FileWarning } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../store';
 import { toast } from 'react-hot-toast';
 import { useConfirm } from '../components/ConfirmDialog';
 import UserGuideModal from '../components/UserGuideModal';
+import DisclaimerModal from '../components/DisclaimerModal';
 import {
     fetchQuickItems,
     insertQuickItem,
@@ -67,6 +68,9 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
 
     // User Guide
     const [showUserGuide, setShowUserGuide] = useState(false);
+
+    // Disclaimer
+    const [showDisclaimer, setShowDisclaimer] = useState(false);
 
     useEffect(() => {
         loadQuickItems();
@@ -656,6 +660,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                     </div>
                 </div>
 
+                {/* View Disclaimer Button */}
+                <button
+                    onClick={() => setShowDisclaimer(true)}
+                    className="w-full btn btn-secondary flex items-center justify-center gap-2 py-3"
+                >
+                    <FileWarning className="w-4 h-4" />
+                    View Disclaimer
+                </button>
+
                 {/* View Guide Button */}
                 <button
                     onClick={() => setShowUserGuide(true)}
@@ -678,6 +691,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             {/* User Guide Modal */}
             {showUserGuide && (
                 <UserGuideModal onComplete={() => setShowUserGuide(false)} />
+            )}
+
+            {/* Disclaimer Modal */}
+            {showDisclaimer && (
+                <DisclaimerModal
+                    viewOnly
+                    onAccept={() => setShowDisclaimer(false)}
+                    onClose={() => setShowDisclaimer(false)}
+                />
             )}
         </div>
         </>

@@ -880,13 +880,28 @@ export async function fetchDailyHistory(userId: string, days: number = 7): Promi
     const startDate = new Date();
     startDate.setDate(endDate.getDate() - days + 1);
 
-    // Fetch all meals in range
+    return fetchDailyHistoryByRange(userId, startDate, endDate);
+}
+
+// Optimized version with date range for faster loading
+export async function fetchDailyHistoryByRange(
+    userId: string, 
+    startDate: Date, 
+    endDate: Date
+): Promise<DailySummary[]> {
+    // Normalize dates to start/end of day
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    // Fetch only aggregated data we need (calories, protein, carbs, fat)
     const { data, error } = await supabase
         .from('meal_logs')
-        .select('*')
+        .select('logged_at, calories, protein, carbs, fat')
         .eq('user_id', userId)
-        .gte('logged_at', startDate.toISOString())
-        .lte('logged_at', endDate.toISOString())
+        .gte('logged_at', start.toISOString())
+        .lte('logged_at', end.toISOString())
         .order('logged_at', { ascending: false });
 
     if (error) {
@@ -894,18 +909,21 @@ export async function fetchDailyHistory(userId: string, days: number = 7): Promi
         return [];
     }
 
-    const meals = data as MealLog[];
+    const meals = data as Pick<MealLog, 'logged_at' | 'calories' | 'protein' | 'carbs' | 'fat'>[];
 
+    // Calculate number of days in range
+    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    
     // Group by date
     const historyMap = new Map<string, DailySummary>();
 
     // Initialize all days in range with 0
-    for (let i = 0; i < days; i++) {
-        const d = new Date(startDate);
+    for (let i = 0; i < diffDays; i++) {
+        const d = new Date(start);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().split('T')[0];
         historyMap.set(dateStr, {
-            date: d,
+            date: new Date(d),
             calories: 0,
             protein: 0,
             carbs: 0,

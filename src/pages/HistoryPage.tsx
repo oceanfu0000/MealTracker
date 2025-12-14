@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { ArrowLeft, Calendar, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchDailyHistory, fetchMealsForDate, DailySummary } from '../lib/api';
+import { fetchDailyHistoryByRange, fetchMealsForDate, DailySummary } from '../lib/api';
 import type { MealLog } from '../types';
 import { useStore } from '../store';
 import MealCard from '../components/MealCard';
@@ -10,27 +10,97 @@ interface HistoryPageProps {
     userId: string;
 }
 
+// Helper to format date for input
+const formatDateForInput = (date: Date): string => {
+    return date.toISOString().split('T')[0];
+};
+
+// Helper to get default date range (last 7 days)
+const getDefaultDateRange = () => {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 6); // 7 days including today
+    return { startDate, endDate };
+};
+
 export default function HistoryPage({ userId }: HistoryPageProps) {
     const navigate = useNavigate();
     const { nutritionTargets } = useStore();
     const [history, setHistory] = useState<DailySummary[]>([]);
     const [loading, setLoading] = useState(true);
 
+    // Date range state
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const defaultRange = useMemo(() => getDefaultDateRange(), []);
+    const [startDate, setStartDate] = useState<string>(formatDateForInput(defaultRange.startDate));
+    const [endDate, setEndDate] = useState<string>(formatDateForInput(defaultRange.endDate));
+    const [appliedRange, setAppliedRange] = useState({ start: startDate, end: endDate });
+
     // Expansion state
     const [expandedDate, setExpandedDate] = useState<string | null>(null);
     const [dayMeals, setDayMeals] = useState<MealLog[]>([]);
     const [loadingMeals, setLoadingMeals] = useState(false);
 
-    useEffect(() => {
-        loadHistory();
-    }, [userId]);
+    // Cache for loaded meals to avoid re-fetching
+    const [mealsCache, setMealsCache] = useState<Map<string, MealLog[]>>(new Map());
 
-    const loadHistory = async () => {
+    useEffect(() => {
+        loadHistory(appliedRange.start, appliedRange.end);
+    }, [userId, appliedRange]);
+
+    const loadHistory = async (start: string, end: string) => {
         setLoading(true);
-        const data = await fetchDailyHistory(userId, 14); // Fetch last 14 days
+        setExpandedDate(null);
+        setDayMeals([]);
+        const data = await fetchDailyHistoryByRange(userId, new Date(start), new Date(end));
         setHistory(data);
         setLoading(false);
     };
+
+    // Validate and apply date range
+    const applyDateRange = useCallback(() => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        
+        if (diffDays > 7) {
+            alert('Please select a range of 7 days or less for optimal performance.');
+            return;
+        }
+        if (start > end) {
+            alert('Start date must be before end date.');
+            return;
+        }
+        
+        setAppliedRange({ start: startDate, end: endDate });
+        setMealsCache(new Map()); // Clear cache when range changes
+        setShowDatePicker(false);
+    }, [startDate, endDate]);
+
+    // Quick preset buttons
+    const setPreset = useCallback((days: number) => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - days + 1);
+        setStartDate(formatDateForInput(start));
+        setEndDate(formatDateForInput(end));
+    }, []);
+
+    // Auto-fill end date when start date changes (7 days from start, capped at today)
+    const handleStartDateChange = useCallback((newStart: string) => {
+        setStartDate(newStart);
+        const start = new Date(newStart);
+        const autoEnd = new Date(start);
+        autoEnd.setDate(start.getDate() + 6); // 7 days including start
+        
+        // Cap at today's date
+        const today = new Date();
+        if (autoEnd > today) {
+            setEndDate(formatDateForInput(today));
+        } else {
+            setEndDate(formatDateForInput(autoEnd));
+        }
+    }, []);
 
     const toggleDate = async (date: Date) => {
         const dateStr = date.toISOString();
@@ -41,15 +111,41 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
         }
 
         setExpandedDate(dateStr);
+        
+        // Check cache first
+        const cacheKey = date.toISOString().split('T')[0];
+        const cachedMeals = mealsCache.get(cacheKey);
+        if (cachedMeals) {
+            setDayMeals(cachedMeals);
+            return;
+        }
+
         setLoadingMeals(true);
         try {
             const meals = await fetchMealsForDate(userId, date);
             setDayMeals(meals);
+            // Store in cache
+            setMealsCache(prev => new Map(prev).set(cacheKey, meals));
         } catch (error) {
             console.error('Failed to load meals', error);
         } finally {
             setLoadingMeals(false);
         }
+    };
+
+    const refreshDay = async (date: Date) => {
+        const cacheKey = date.toISOString().split('T')[0];
+        // Clear cache for this day
+        setMealsCache(prev => {
+            const newCache = new Map(prev);
+            newCache.delete(cacheKey);
+            return newCache;
+        });
+        // Reload meals and history
+        const meals = await fetchMealsForDate(userId, date);
+        setDayMeals(meals);
+        setMealsCache(prev => new Map(prev).set(cacheKey, meals));
+        loadHistory(appliedRange.start, appliedRange.end);
     };
 
     const getBarWidth = (current: number, target: number) => {
@@ -67,18 +163,94 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
     return (
         <div className="min-h-screen bg-neutral-50 pb-24">
             <div className="bg-white border-b border-neutral-200 sticky top-0 z-10">
-                <div className="max-w-4xl mx-auto p-4 flex items-center gap-4">
+                <div className="max-w-4xl mx-auto p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => navigate('/')}
+                            className="p-2 -ml-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+                        >
+                            <ArrowLeft className="w-6 h-6" />
+                        </button>
+                        <h1 className="text-xl font-bold text-neutral-900">History</h1>
+                    </div>
                     <button
-                        onClick={() => navigate('/')}
-                        className="p-2 -ml-2 text-neutral-600 hover:text-neutral-900 transition-colors"
+                        onClick={() => setShowDatePicker(!showDatePicker)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
                     >
-                        <ArrowLeft className="w-6 h-6" />
+                        <Filter className="w-4 h-4" />
+                        <span className="hidden sm:inline">Date Range</span>
                     </button>
-                    <h1 className="text-xl font-bold text-neutral-900">History</h1>
                 </div>
+
+                {/* Date Range Picker */}
+                {showDatePicker && (
+                    <div className="max-w-4xl mx-auto px-4 pb-4 animate-fade-in">
+                        <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                            {/* Quick Presets */}
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <button
+                                    onClick={() => setPreset(3)}
+                                    className="px-3 py-1.5 text-xs font-medium bg-white border border-neutral-200 rounded-full hover:bg-neutral-100 transition-colors"
+                                >
+                                    Last 3 days
+                                </button>
+                                <button
+                                    onClick={() => setPreset(7)}
+                                    className="px-3 py-1.5 text-xs font-medium bg-white border border-neutral-200 rounded-full hover:bg-neutral-100 transition-colors"
+                                >
+                                    Last 7 days
+                                </button>
+                            </div>
+                            
+                            {/* Custom Range */}
+                            <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex-1 min-w-[140px]">
+                                    <label className="block text-xs font-medium text-neutral-500 mb-1">From</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        max={formatDateForInput(new Date())}
+                                        onChange={(e) => handleStartDateChange(e.target.value)}
+                                        className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-[140px]">
+                                    <label className="block text-xs font-medium text-neutral-500 mb-1">To</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        min={startDate}
+                                        max={formatDateForInput(new Date())}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <button
+                                    onClick={applyDateRange}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-accent-600 hover:bg-accent-700 rounded-lg transition-colors"
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                            <p className="text-xs text-neutral-400 mt-2">
+                                * Maximum range: 7 days for optimal loading speed
+                            </p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="max-w-4xl mx-auto p-4 space-y-4">
+                {/* Current Range Display */}
+                <div className="text-sm text-neutral-500 flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    <span>
+                        Showing: {new Date(appliedRange.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} 
+                        {' - '}
+                        {new Date(appliedRange.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                </div>
+
                 {loading ? (
                     <div className="flex justify-center py-12">
                         <div className="spinner" />
@@ -192,8 +364,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                             meal={meal}
                                                             onDelete={() => {
                                                                 // Refresh both current meals and history stats
-                                                                toggleDate(day.date);
-                                                                loadHistory();
+                                                                refreshDay(day.date);
                                                             }}
                                                         />
                                                     ))}
