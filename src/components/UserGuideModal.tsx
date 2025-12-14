@@ -10,7 +10,8 @@ import {
     CheckCircle,
     Utensils,
     Sparkles,
-    Users
+    Users,
+    Layers
 } from 'lucide-react';
 
 interface UserGuideModalProps {
@@ -66,6 +67,14 @@ const guideSteps: GuideStep[] = [
         example: "Sharing a pizza with 3 friends? Enter the total pizza's nutrition, set 4 people, and adjust if you ate more (1.5) or less (0.75) than average!",
         tip: "The app will automatically calculate your portion. Perfect for steamboat, BBQ, or any shared dining! 🍕",
         color: "from-indigo-500 to-violet-500"
+    },
+    {
+        icon: <Layers className="w-12 h-12" />,
+        title: "🍱 Combine Multiple Items",
+        description: "Having cai png with teh c? Use the 'Combine' button to group multiple food items together as one meal! They'll show as a dropdown on your home page.",
+        example: "Combine: Cai png + Teh C Peng = 'Lunch'. All items grouped and totals calculated!",
+        tip: "Tap the 'Combine' button in the header, name your meal, then add items from any tab. Perfect for meals with drinks or sides! 🍽️",
+        color: "from-teal-500 to-cyan-500"
     },
     {
         icon: <Target className="w-12 h-12" />,

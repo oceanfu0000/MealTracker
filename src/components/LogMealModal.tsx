@@ -1,9 +1,23 @@
 import { useState, useRef } from 'react';
-import { X, Camera, Upload, Loader2, Search, Calendar } from 'lucide-react';
-import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
+import { X, Camera, Upload, Loader2, Search, Calendar, Plus, Layers, ChevronDown } from 'lucide-react';
+import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems, generateMealGroupId, MEAL_GROUP_OPTIONS } from '../lib/api';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { QuickItem } from '../types';
+
+// Interface for items added to current meal group
+interface MealGroupItem {
+    id: string;
+    description: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    image_url: string | null;
+    meal_type: 'camera' | 'manual' | 'quick';
+    quick_item_id?: string;
+    quantity: number;
+}
 
 interface LogMealModalProps {
     userId: string;
@@ -38,6 +52,11 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     const [isGroupMeal, setIsGroupMeal] = useState(false);
     const [groupSize, setGroupSize] = useState('2');
     const [portionAte, setPortionAte] = useState('1');
+
+    // Meal grouping (combine multiple items)
+    const [isCombinedMeal, setIsCombinedMeal] = useState(false);
+    const [mealGroupName, setMealGroupName] = useState('');
+    const [mealGroupItems, setMealGroupItems] = useState<MealGroupItem[]>([]);
 
     // Search tab
     const [searchText, setSearchText] = useState('');
@@ -140,8 +159,157 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         }
     };
 
+    // Add item to meal group (for combined meals)
+    const addToMealGroup = () => {
+        if (!manualForm.description || !manualForm.calories) {
+            toast.error('Please fill in description and calories');
+            return;
+        }
+
+        // Calculate final values with group sharing if enabled
+        let finalCalories = parseInt(manualForm.calories);
+        let finalProtein = parseFloat(manualForm.protein || '0');
+        let finalCarbs = parseFloat(manualForm.carbs || '0');
+        let finalFat = parseFloat(manualForm.fat || '0');
+        let finalDescription = manualForm.description;
+
+        if (isGroupMeal) {
+            const numPeople = parseFloat(groupSize || '2');
+            const myPortion = parseFloat(portionAte || '1');
+            const portionMultiplier = myPortion / numPeople;
+            
+            finalCalories = Math.round(finalCalories * portionMultiplier);
+            finalProtein = Number((finalProtein * portionMultiplier).toFixed(1));
+            finalCarbs = Number((finalCarbs * portionMultiplier).toFixed(1));
+            finalFat = Number((finalFat * portionMultiplier).toFixed(1));
+            finalDescription = `${manualForm.description} (${myPortion}/${numPeople} share)`;
+        }
+
+        const newItem: MealGroupItem = {
+            id: crypto.randomUUID(),
+            description: finalDescription,
+            calories: finalCalories,
+            protein: finalProtein,
+            carbs: finalCarbs,
+            fat: finalFat,
+            image_url: selectedImage,
+            meal_type: selectedImage ? 'camera' : 'manual',
+            quantity: 1,
+        };
+
+        setMealGroupItems([...mealGroupItems, newItem]);
+        
+        // Reset form for next item
+        setManualForm({ description: '', calories: '', protein: '', carbs: '', fat: '' });
+        setSelectedImage(null);
+        setImageFile(null);
+        setIsGroupMeal(false);
+        setGroupSize('2');
+        setPortionAte('1');
+        
+        toast.success('Item added to meal!');
+    };
+
+    // Add quick item to meal group
+    const addQuickItemToGroup = () => {
+        if (!selectedQuickItem) return;
+
+        const qty = parseFloat(quantity);
+        const servingSize = selectedQuickItem.serving_size || 1;
+        const ratio = qty / servingSize;
+
+        const newItem: MealGroupItem = {
+            id: crypto.randomUUID(),
+            description: selectedQuickItem.name,
+            calories: Math.round(selectedQuickItem.calories_per_unit * ratio),
+            protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
+            carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
+            fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
+            image_url: null,
+            meal_type: 'quick',
+            quick_item_id: selectedQuickItem.id,
+            quantity: qty,
+        };
+
+        setMealGroupItems([...mealGroupItems, newItem]);
+        setSelectedQuickItem(null);
+        setQuantity('1');
+        
+        toast.success('Item added to meal!');
+    };
+
+    // Remove item from meal group
+    const removeFromMealGroup = (id: string) => {
+        setMealGroupItems(mealGroupItems.filter(item => item.id !== id));
+    };
+
+    // Calculate totals for meal group
+    const mealGroupTotals = mealGroupItems.reduce(
+        (acc, item) => ({
+            calories: acc.calories + item.calories,
+            protein: acc.protein + item.protein,
+            carbs: acc.carbs + item.carbs,
+            fat: acc.fat + item.fat,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+
+    // Submit all items in meal group
+    const handleMealGroupSubmit = async () => {
+        if (mealGroupItems.length === 0) {
+            toast.error('Add at least one item to the meal');
+            return;
+        }
+
+        setLoading(true);
+
+        try {
+            const todayStr = format(new Date(), 'yyyy-MM-dd');
+            const isToday = loggedDate === todayStr;
+            const finalLoggedAt = isToday ? new Date().toISOString() : new Date(`${loggedDate}T12:00:00`).toISOString();
+
+            const groupId = generateMealGroupId();
+            const groupName = mealGroupName.trim() || 'Combined Meal';
+
+            // Insert all items with the same group ID
+            for (const item of mealGroupItems) {
+                await insertMeal({
+                    user_id: userId,
+                    meal_type: item.meal_type,
+                    description: item.description,
+                    image_url: item.image_url,
+                    quick_item_id: item.quick_item_id || null,
+                    quantity: item.quantity,
+                    calories: item.calories,
+                    protein: item.protein,
+                    carbs: item.carbs,
+                    fat: item.fat,
+                    meal_group_id: groupId,
+                    meal_group_name: groupName,
+                    logged_at: finalLoggedAt,
+                });
+            }
+
+            toast.success(`Logged ${mealGroupItems.length} items as "${groupName}"`);
+            onMealLogged();
+            onClose();
+        } catch (error) {
+            console.error('Error logging meal group:', error);
+            toast.error('Failed to log meal. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleManualSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // If combined meal mode, add to group instead
+        if (isCombinedMeal) {
+            addToMealGroup();
+            return;
+        }
+        
         setLoading(true);
 
         try {
@@ -184,6 +352,8 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 protein: finalProtein,
                 carbs: finalCarbs,
                 fat: finalFat,
+                meal_group_id: null,
+                meal_group_name: null,
                 logged_at: finalLoggedAt,
             });
 
@@ -220,6 +390,12 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         e.preventDefault();
         if (!selectedQuickItem) return;
 
+        // If combined meal mode, add to group instead
+        if (isCombinedMeal) {
+            addQuickItemToGroup();
+            return;
+        }
+
         setLoading(true);
         const qty = parseFloat(quantity);
 
@@ -243,6 +419,8 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
                 carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
                 fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
+                meal_group_id: null,
+                meal_group_name: null,
                 logged_at: finalLoggedAt,
             });
 
@@ -284,13 +462,100 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                             />
                         </div>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
-                    >
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* Combined Meal Toggle */}
+                        <button
+                            onClick={() => setIsCombinedMeal(!isCombinedMeal)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                isCombinedMeal 
+                                    ? 'bg-primary-100 text-primary-700 border-2 border-primary-500' 
+                                    : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border-2 border-transparent'
+                            }`}
+                        >
+                            <Layers className="w-4 h-4" />
+                            <span className="hidden sm:inline">Combine</span>
+                            {mealGroupItems.length > 0 && (
+                                <span className="bg-primary-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                                    {mealGroupItems.length}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={onClose}
+                            className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
+
+                {/* Combined Meal Panel */}
+                {isCombinedMeal && (
+                    <div className="bg-primary-50 border-b border-primary-200 px-4 py-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-lg">🍽️</span>
+                                <div className="relative">
+                                    <select
+                                        value={mealGroupName}
+                                        onChange={(e) => setMealGroupName(e.target.value)}
+                                        className="appearance-none bg-white border border-primary-200 rounded-lg pl-3 pr-8 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
+                                    >
+                                        <option value="">Select meal type...</option>
+                                        {MEAL_GROUP_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                                </div>
+                            </div>
+                            {mealGroupItems.length > 0 && (
+                                <button
+                                    onClick={handleMealGroupSubmit}
+                                    disabled={loading || !mealGroupName}
+                                    className="btn btn-primary text-sm py-1.5 px-4 disabled:opacity-50"
+                                >
+                                    {loading ? 'Saving...' : `Log ${mealGroupItems.length} Items`}
+                                </button>
+                            )}
+                        </div>
+                        
+                        {mealGroupItems.length > 0 ? (
+                            <div className="space-y-2">
+                                <div className="text-xs text-primary-600 font-medium">Items in this meal:</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {mealGroupItems.map((item) => (
+                                        <div 
+                                            key={item.id}
+                                            className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 text-sm border border-primary-200"
+                                        >
+                                            <span className="text-neutral-700">{item.description}</span>
+                                            <span className="text-neutral-400 text-xs">({item.calories} cal)</span>
+                                            <button
+                                                onClick={() => removeFromMealGroup(item.id)}
+                                                className="text-neutral-400 hover:text-red-500 ml-1"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex gap-4 text-xs text-primary-700 pt-1">
+                                    <span><strong>{Math.round(mealGroupTotals.calories)}</strong> cal</span>
+                                    <span><strong>{Math.round(mealGroupTotals.protein)}g</strong> protein</span>
+                                    <span><strong>{Math.round(mealGroupTotals.carbs)}g</strong> carbs</span>
+                                    <span><strong>{Math.round(mealGroupTotals.fat)}g</strong> fat</span>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-xs text-primary-600">
+                                Add items using the tabs below. They'll be grouped together as one meal.
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex border-b border-neutral-200">
@@ -614,7 +879,12 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                 {loading ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <span className="spinner" />
-                                        Saving...
+                                        {isCombinedMeal ? 'Adding...' : 'Saving...'}
+                                    </span>
+                                ) : isCombinedMeal ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <Plus className="w-4 h-4" />
+                                        Add to Meal
                                     </span>
                                 ) : (
                                     'Log Meal'
@@ -722,6 +992,11 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                     <span className="flex items-center justify-center gap-2">
                                                         <span className="spinner" />
                                                         Adding...
+                                                    </span>
+                                                ) : isCombinedMeal ? (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <Plus className="w-4 h-4" />
+                                                        Add to Meal
                                                     </span>
                                                 ) : (
                                                     'Add to Log'

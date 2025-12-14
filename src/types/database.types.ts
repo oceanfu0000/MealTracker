@@ -41,6 +41,8 @@ export interface MealLog {
     protein: number;
     carbs: number;
     fat: number;
+    meal_group_id: string | null;
+    meal_group_name: string | null;
     logged_at: string;
     created_at: string;
     updated_at: string;

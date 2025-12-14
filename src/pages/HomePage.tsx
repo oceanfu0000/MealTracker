@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import DailyHeader from '../components/DailyHeader';
-import MealCard from '../components/MealCard';
+import GroupedMealCard from '../components/GroupedMealCard';
 import LogMealModal from '../components/LogMealModal';
 import { useStore } from '../store';
-import { fetchMealsForDate, calculateDailyTotals } from '../lib/api';
-import type { MealLog } from '../types';
+import { fetchMealsForDate, calculateDailyTotals, groupMealsForDisplay } from '../lib/api';
+import type { GroupedMeal } from '../types';
 
 interface HomePageProps {
     userId: string;
@@ -13,7 +13,7 @@ interface HomePageProps {
 }
 
 export default function HomePage({ userId, onModalChange }: HomePageProps) {
-    const [meals, setMeals] = useState<MealLog[]>([]);
+    const [groupedMeals, setGroupedMeals] = useState<GroupedMeal[]>([]);
     const [loading, setLoading] = useState(true);
     const [showLogModal, setShowLogModal] = useState(false);
 
@@ -27,7 +27,8 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
     const loadMeals = async () => {
         setLoading(true);
         const fetchedMeals = await fetchMealsForDate(userId, selectedDate);
-        setMeals(fetchedMeals);
+        const grouped = groupMealsForDisplay(fetchedMeals);
+        setGroupedMeals(grouped);
 
         const totals = await calculateDailyTotals(userId, selectedDate);
         setDailyTotals(totals);
@@ -50,7 +51,7 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                     </div>
                 ) : (
                     <>
-                        {meals.length === 0 ? (
+                        {groupedMeals.length === 0 ? (
                             <div className="text-center py-12">
                                 <div className="inline-block p-4 bg-neutral-100 rounded-2xl mb-4">
                                     <svg
@@ -82,13 +83,21 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {meals.map((meal) => (
-                                    <MealCard
-                                        key={meal.id}
-                                        meal={meal}
-                                        onDelete={loadMeals}
-                                    />
-                                ))}
+                                {groupedMeals.map((group) => {
+                                    // Get other ungrouped meals for grouping feature (exclude current meal)
+                                    const otherUngroupedMeals = groupedMeals.filter(
+                                        g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
+                                    );
+                                    
+                                    return (
+                                        <GroupedMealCard
+                                            key={group.groupId || group.meals[0].id}
+                                            group={group}
+                                            onDelete={loadMeals}
+                                            otherUngroupedMeals={otherUngroupedMeals}
+                                        />
+                                    );
+                                })}
                             </div>
                         )}
                     </>

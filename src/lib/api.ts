@@ -14,6 +14,7 @@ import type {
     InsertManualActivity,
     Profile,
     InsertProfile,
+    GroupedMeal,
 } from '../types';
 import { format } from 'date-fns';
 
@@ -225,6 +226,88 @@ export async function updateMeal(id: string, updates: UpdateMealLog): Promise<Me
     return data;
 }
 
+// Predefined meal group names
+export const MEAL_GROUP_OPTIONS = [
+    { value: 'Breakfast', label: '🌅 Breakfast', emoji: '🌅' },
+    { value: 'Brunch', label: '🥐 Brunch', emoji: '🥐' },
+    { value: 'Lunch', label: '☀️ Lunch', emoji: '☀️' },
+    { value: 'Tea Time', label: '🍵 Tea Time', emoji: '🍵' },
+    { value: 'Dinner', label: '🌙 Dinner', emoji: '🌙' },
+    { value: 'Supper', label: '🌃 Supper', emoji: '🌃' },
+    { value: 'Snack', label: '🍿 Snack', emoji: '🍿' },
+    { value: 'Pre-Workout', label: '💪 Pre-Workout', emoji: '💪' },
+    { value: 'Post-Workout', label: '🏋️ Post-Workout', emoji: '🏋️' },
+    { value: 'Others', label: '📦 Others', emoji: '📦' },
+];
+
+// Add a single meal to an existing or new group
+export async function addMealToGroup(
+    mealId: string, 
+    groupName: string, 
+    existingGroupId?: string
+): Promise<boolean> {
+    const groupId = existingGroupId || generateMealGroupId();
+    
+    const { error } = await supabase
+        .from('meal_logs')
+        // @ts-expect-error - Supabase type inference issue
+        .update({ 
+            meal_group_id: groupId, 
+            meal_group_name: groupName 
+        })
+        .eq('id', mealId);
+
+    if (error) {
+        console.error('Error adding meal to group:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Add multiple meals to a group
+export async function addMealsToGroup(
+    mealIds: string[], 
+    groupName: string
+): Promise<boolean> {
+    const groupId = generateMealGroupId();
+    
+    const { error } = await supabase
+        .from('meal_logs')
+        // @ts-expect-error - Supabase type inference issue
+        .update({ 
+            meal_group_id: groupId, 
+            meal_group_name: groupName 
+        })
+        .in('id', mealIds);
+
+    if (error) {
+        console.error('Error adding meals to group:', error);
+        return false;
+    }
+
+    return true;
+}
+
+// Remove a meal from its group (ungroup)
+export async function removeMealFromGroup(mealId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('meal_logs')
+        // @ts-expect-error - Supabase type inference issue
+        .update({ 
+            meal_group_id: null, 
+            meal_group_name: null 
+        })
+        .eq('id', mealId);
+
+    if (error) {
+        console.error('Error removing meal from group:', error);
+        return false;
+    }
+
+    return true;
+}
+
 export async function deleteMeal(id: string): Promise<boolean> {
     const { error } = await supabase
         .from('meal_logs')
@@ -252,6 +335,93 @@ export async function calculateDailyTotals(userId: string, date: Date): Promise<
         }),
         { calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 }
     );
+}
+
+// Group meals by meal_group_id for display
+export function groupMealsForDisplay(meals: MealLog[]): GroupedMeal[] {
+    const groupMap = new Map<string, MealLog[]>();
+    const ungroupedMeals: MealLog[] = [];
+
+    // Separate grouped and ungrouped meals
+    meals.forEach(meal => {
+        if (meal.meal_group_id) {
+            const existing = groupMap.get(meal.meal_group_id) || [];
+            existing.push(meal);
+            groupMap.set(meal.meal_group_id, existing);
+        } else {
+            ungroupedMeals.push(meal);
+        }
+    });
+
+    const result: GroupedMeal[] = [];
+
+    // Add grouped meals
+    groupMap.forEach((groupMeals, groupId) => {
+        const totals = groupMeals.reduce(
+            (acc, meal) => ({
+                calories: acc.calories + meal.calories,
+                protein: acc.protein + meal.protein,
+                carbs: acc.carbs + meal.carbs,
+                fat: acc.fat + meal.fat,
+            }),
+            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        );
+
+        // Get the group name from any meal in the group (they should all have the same)
+        const groupName = groupMeals[0].meal_group_name;
+        
+        // Find the latest logged_at time
+        const latestLoggedAt = groupMeals.reduce((latest, meal) => 
+            meal.logged_at > latest ? meal.logged_at : latest, groupMeals[0].logged_at);
+
+        result.push({
+            groupId,
+            groupName,
+            meals: groupMeals.sort((a, b) => new Date(b.logged_at).getTime() - new Date(a.logged_at).getTime()),
+            totalCalories: totals.calories,
+            totalProtein: totals.protein,
+            totalCarbs: totals.carbs,
+            totalFat: totals.fat,
+            latestLoggedAt,
+        });
+    });
+
+    // Add ungrouped meals as individual "groups"
+    ungroupedMeals.forEach(meal => {
+        result.push({
+            groupId: null,
+            groupName: null,
+            meals: [meal],
+            totalCalories: meal.calories,
+            totalProtein: meal.protein,
+            totalCarbs: meal.carbs,
+            totalFat: meal.fat,
+            latestLoggedAt: meal.logged_at,
+        });
+    });
+
+    // Sort by latest logged_at (most recent first)
+    return result.sort((a, b) => new Date(b.latestLoggedAt).getTime() - new Date(a.latestLoggedAt).getTime());
+}
+
+// Generate a UUID for meal grouping
+export function generateMealGroupId(): string {
+    return crypto.randomUUID();
+}
+
+// Delete all meals in a group
+export async function deleteMealGroup(groupId: string): Promise<boolean> {
+    const { error } = await supabase
+        .from('meal_logs')
+        .delete()
+        .eq('meal_group_id', groupId);
+
+    if (error) {
+        console.error('Error deleting meal group:', error);
+        return false;
+    }
+
+    return true;
 }
 
 // ============================================

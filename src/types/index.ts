@@ -11,6 +11,18 @@ export interface DailyTotals {
     mealCount: number;
 }
 
+// Grouped meal type for displaying meals in UI
+export interface GroupedMeal {
+    groupId: string | null;
+    groupName: string | null;
+    meals: import('./database.types').MealLog[];
+    totalCalories: number;
+    totalProtein: number;
+    totalCarbs: number;
+    totalFat: number;
+    latestLoggedAt: string;
+}
+
 // Nutrition calculation request
 export interface NutritionCalculationRequest {
     age: number;
