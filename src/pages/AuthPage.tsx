@@ -1,10 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { LogIn, UserPlus, Loader2, KeyRound } from 'lucide-react';
+import { LogIn, UserPlus, Loader2, KeyRound, Mail, AlertCircle, RefreshCw } from 'lucide-react';
 import { verifyAccessCode } from '../lib/api';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
 
 type AuthMode = 'login' | 'register';
+
+// Parse error from URL hash (Supabase redirects with hash fragments)
+function parseAuthError(): { error: string; errorCode: string; errorDescription: string } | null {
+    const hash = window.location.hash.substring(1);
+    if (!hash) return null;
+    
+    const params = new URLSearchParams(hash);
+    const error = params.get('error');
+    const errorCode = params.get('error_code');
+    const errorDescription = params.get('error_description');
+    
+    if (error) {
+        return {
+            error,
+            errorCode: errorCode || '',
+            errorDescription: errorDescription?.replace(/\+/g, ' ') || 'An error occurred'
+        };
+    }
+    return null;
+}
+
+// Get user-friendly error message
+function getErrorMessage(errorCode: string, errorDescription: string): string {
+    switch (errorCode) {
+        case 'otp_expired':
+            return 'Your email confirmation link has expired. Please request a new one below.';
+        case 'access_denied':
+            return errorDescription || 'Access was denied. Please try again.';
+        default:
+            return errorDescription || 'An error occurred during authentication.';
+    }
+}
 
 export default function AuthPage() {
     const { signIn, signUp } = useAuth();
@@ -15,6 +48,56 @@ export default function AuthPage() {
     const [accessCode, setAccessCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [authError, setAuthError] = useState<{ message: string; isExpired: boolean } | null>(null);
+    const [resendEmail, setResendEmail] = useState('');
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendSuccess, setResendSuccess] = useState(false);
+
+    // Check for auth errors in URL on mount
+    useEffect(() => {
+        const urlError = parseAuthError();
+        if (urlError) {
+            const message = getErrorMessage(urlError.errorCode, urlError.errorDescription);
+            const isExpired = urlError.errorCode === 'otp_expired';
+            setAuthError({ message, isExpired });
+            
+            // Clear the hash from URL without reload
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+    }, []);
+
+    const handleResendConfirmation = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!resendEmail) {
+            toast.error('Please enter your email address');
+            return;
+        }
+        
+        setResendLoading(true);
+        try {
+            const { error } = await supabase.auth.resend({
+                type: 'signup',
+                email: resendEmail,
+            });
+            
+            if (error) {
+                toast.error(error.message);
+            } else {
+                setResendSuccess(true);
+                toast.success('Confirmation email sent! Please check your inbox.');
+            }
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to resend confirmation email');
+        } finally {
+            setResendLoading(false);
+        }
+    };
+
+    const dismissAuthError = () => {
+        setAuthError(null);
+        setResendSuccess(false);
+        setResendEmail('');
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,6 +166,71 @@ export default function AuthPage() {
                 </div>
 
                 <div className="card animate-fade-in" style={{ animationDelay: '0.1s' }}>
+                    {/* Auth Error Banner (from email confirmation redirect) */}
+                    {authError && (
+                        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                <div className="flex-1">
+                                    <h3 className="font-medium text-amber-800 mb-1">
+                                        Email Confirmation Issue
+                                    </h3>
+                                    <p className="text-sm text-amber-700 mb-3">
+                                        {authError.message}
+                                    </p>
+                                    
+                                    {authError.isExpired && !resendSuccess && (
+                                        <form onSubmit={handleResendConfirmation} className="space-y-3">
+                                            <div>
+                                                <label className="text-xs font-medium text-amber-800 mb-1 block">
+                                                    Enter your email to resend confirmation
+                                                </label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="email"
+                                                        className="input flex-1 text-sm py-2"
+                                                        value={resendEmail}
+                                                        onChange={(e) => setResendEmail(e.target.value)}
+                                                        placeholder="you@example.com"
+                                                        disabled={resendLoading}
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={resendLoading}
+                                                        className="btn btn-primary px-3 py-2 text-sm flex items-center gap-1"
+                                                    >
+                                                        {resendLoading ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <RefreshCw className="w-4 h-4" />
+                                                                Resend
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    )}
+                                    
+                                    {resendSuccess && (
+                                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 p-2 rounded">
+                                            <Mail className="w-4 h-4" />
+                                            <span>Confirmation email sent! Check your inbox.</span>
+                                        </div>
+                                    )}
+                                    
+                                    <button
+                                        onClick={dismissAuthError}
+                                        className="text-xs text-amber-600 hover:text-amber-800 mt-2 underline"
+                                    >
+                                        Dismiss
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Tab Switcher */}
                     <div className="flex gap-2 mb-6 p-1 bg-neutral-100 rounded-lg">
                         <button
