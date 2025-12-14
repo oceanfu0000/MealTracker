@@ -3,6 +3,7 @@ import { Trash2, ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import type { MealLog } from '../types';
 import { deleteMeal } from '../lib/api';
+import { useConfirm } from './ConfirmDialog';
 
 interface MealCardProps {
     meal: MealLog;
@@ -11,9 +12,18 @@ interface MealCardProps {
 
 export default function MealCard({ meal, onDelete }: MealCardProps) {
     const [deleting, setDeleting] = useState(false);
+    const { confirm, ConfirmDialog } = useConfirm();
 
     const handleDelete = async () => {
-        if (!confirm('Delete this meal?')) return;
+        const confirmed = await confirm({
+            title: 'Delete Meal',
+            message: 'Are you sure you want to delete this meal? This action cannot be undone.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            variant: 'danger',
+        });
+        
+        if (!confirmed) return;
 
         setDeleting(true);
         const success = await deleteMeal(meal.id);
@@ -33,16 +43,18 @@ export default function MealCard({ meal, onDelete }: MealCardProps) {
     });
 
     return (
-        <div className="card animate-fade-in">
-            <div className="flex gap-4">
-                {meal.image_url ? (
-                    <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-neutral-100">
-                        <img
-                            src={meal.image_url}
-                            alt={meal.description}
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
+        <>
+            {ConfirmDialog}
+            <div className="card animate-fade-in">
+                <div className="flex gap-4">
+                    {meal.image_url ? (
+                        <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-neutral-100">
+                            <img
+                                src={meal.image_url}
+                                alt={meal.description}
+                                className="w-full h-full object-cover"
+                            />
+                        </div>
                 ) : (
                     <div className="w-20 h-20 flex-shrink-0 rounded-lg bg-neutral-100 flex items-center justify-center">
                         <ImageIcon className="w-8 h-8 text-neutral-400" />
@@ -87,5 +99,6 @@ export default function MealCard({ meal, onDelete }: MealCardProps) {
                 </div>
             </div>
         </div>
+        </>
     );
 }

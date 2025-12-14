@@ -3,6 +3,7 @@ import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw } from 'l
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../store';
 import { toast } from 'react-hot-toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import {
     fetchQuickItems,
     insertQuickItem,
@@ -25,6 +26,7 @@ interface ProfilePageProps {
 export default function ProfilePage({ userId }: ProfilePageProps) {
     const { signOut } = useAuth();
     const { profile, nutritionTargets } = useStore();
+    const { confirm, ConfirmDialog } = useConfirm();
 
     const [quickItems, setQuickItems] = useState<QuickItem[]>([]);
     const [showAddQuickItem, setShowAddQuickItem] = useState(false);
@@ -100,7 +102,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
     // ...
 
     const handleDeleteQuickItem = async (id: string) => {
-        if (confirm('Delete this quick item?')) {
+        const confirmed = await confirm({
+            title: 'Delete Quick Item',
+            message: 'Are you sure you want to delete this quick item? This action cannot be undone.',
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            variant: 'danger',
+        });
+        
+        if (confirmed) {
             await deleteQuickItem(id);
             loadQuickItems();
             toast.success('Quick item deleted');
@@ -132,7 +142,15 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
     };
 
     const handleSignOut = async () => {
-        if (confirm('Are you sure you want to sign out?')) {
+        const confirmed = await confirm({
+            title: 'Sign Out',
+            message: 'Are you sure you want to sign out of your account?',
+            confirmText: 'Sign Out',
+            cancelText: 'Cancel',
+            variant: 'warning',
+        });
+        
+        if (confirmed) {
             await signOut();
         }
     };
@@ -253,18 +271,20 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
     };
 
     return (
-        <div className="min-h-screen bg-neutral-50 pb-32">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-primary-600 to-primary-700 text-white p-6">
-                <div className="max-w-4xl mx-auto">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                            <User className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <h1 className="text-2xl font-bold">Profile</h1>
-                                <button
+        <>
+            {ConfirmDialog}
+            <div className="min-h-screen bg-neutral-50 pb-32">
+                {/* Header */}
+                <div className="bg-gradient-to-br from-primary-600 to-primary-700 text-white p-6">
+                    <div className="max-w-4xl mx-auto">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                                <User className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h1 className="text-2xl font-bold">Profile</h1>
+                                    <button
                                     onClick={handleEditProfile}
                                     className="p-1 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
                                 >
@@ -641,5 +661,6 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                 </button>
             </div>
         </div>
+        </>
     );
 }
