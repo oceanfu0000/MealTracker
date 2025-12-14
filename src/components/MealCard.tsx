@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Trash2, ImageIcon } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import type { MealLog } from '../types';
 import { deleteMeal } from '../lib/api';
 
@@ -19,8 +20,9 @@ export default function MealCard({ meal, onDelete }: MealCardProps) {
 
         if (success) {
             onDelete();
+            toast.success('Meal deleted');
         } else {
-            alert('Failed to delete meal');
+            toast.error('Failed to delete meal');
         }
         setDeleting(false);
     };

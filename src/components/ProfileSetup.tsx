@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import type { UserGoal } from '../types';
 import {
     calculateNutritionTargets,
@@ -49,7 +50,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
             setTargets(calculated);
         } catch (error) {
             console.error('Error calculating targets:', error);
-            alert('Failed to calculate nutrition targets. Please try again.');
+            toast.error('Failed to calculate nutrition targets. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -84,7 +85,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
             }
         } catch (error) {
             console.error('Error saving profile:', error);
-            alert('Failed to save profile. Please try again.');
+            toast.error('Failed to save profile. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -189,8 +190,8 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
                                         type="button"
                                         onClick={() => setFormData({ ...formData, goal })}
                                         className={`py-3 rounded-lg font-medium transition-all duration-200 ${formData.goal === goal
-                                                ? 'bg-primary-600 text-white shadow-md scale-105'
-                                                : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
+                                            ? 'bg-primary-600 text-white shadow-md scale-105'
+                                            : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50'
                                             }`}
                                     >
                                         {goal.charAt(0).toUpperCase() + goal.slice(1)}

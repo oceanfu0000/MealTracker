@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { LogIn, UserPlus, Loader2, KeyRound } from 'lucide-react';
 import { verifyAccessCode } from '../lib/api';
+import { toast } from 'react-hot-toast';
 
 type AuthMode = 'login' | 'register';
 
@@ -42,13 +43,15 @@ export default function AuthPage() {
                     return;
                 }
 
+                // ... (inside component)
                 await signUp(email, password);
-                alert('Account created! Please check your email to verify your account.');
+                toast.success('Account created! Please check your email.');
             } else {
                 await signIn(email, password);
             }
         } catch (err: any) {
             setError(err.message || 'Authentication failed');
+            toast.error(err.message || 'Authentication failed');
         } finally {
             setLoading(false);
         }

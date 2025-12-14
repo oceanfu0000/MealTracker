@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { User, LogOut, Plus, Trash2, Edit2, X, Camera, Save, RefreshCw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useStore } from '../store';
+import { toast } from 'react-hot-toast';
 import {
     fetchQuickItems,
     insertQuickItem,
@@ -92,8 +93,102 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             setNewItemForm(prev => ({ ...prev, image_url: compressed }));
         } catch (error) {
             console.error('Error processing image:', error);
-            alert('Failed to process image');
+            toast.error('Failed to process image');
         }
+    };
+
+    // ...
+
+    const handleDeleteQuickItem = async (id: string) => {
+        if (confirm('Delete this quick item?')) {
+            await deleteQuickItem(id);
+            loadQuickItems();
+            toast.success('Quick item deleted');
+        }
+    };
+
+    const handleSaveActivity = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoadingActivity(true);
+
+        try {
+            const result = await upsertActivity({
+                user_id: userId,
+                steps: parseInt(activityForm.steps || '0'),
+                active_energy: parseInt(activityForm.activeEnergy || '0'),
+                workout_description: activityForm.workout || null,
+                activity_date: format(new Date(), 'yyyy-MM-dd'),
+            });
+
+            if (result) {
+                toast.success('Activity saved!');
+            }
+        } catch (error) {
+            console.error('Error saving activity:', error);
+            toast.error('Failed to save activity');
+        } finally {
+            setLoadingActivity(false);
+        }
+    };
+
+    const handleSignOut = async () => {
+        if (confirm('Are you sure you want to sign out?')) {
+            await signOut();
+        }
+    };
+
+    // ...
+
+    const handleRecalculateProfile = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!profile) return;
+        setCalculatingTargets(true);
+
+        try {
+            // 1. Update Profile
+            await upsertProfile({
+                id: userId,
+                weight_kg: parseFloat(editProfileForm.weight),
+                goal: editProfileForm.goal,
+                training_frequency: parseInt(editProfileForm.trainingFreq),
+                // Keep existing values
+                age: profile.age,
+                height_cm: profile.height_cm,
+                body_fat_percentage: profile.body_fat_percentage
+            });
+
+            // 2. Recalculate Targets
+            const newTargets = await calculateNutritionTargets({
+                age: profile.age,
+                weight_kg: parseFloat(editProfileForm.weight),
+                height_cm: profile.height_cm,
+                body_fat_percentage: profile.body_fat_percentage,
+                training_frequency: parseInt(editProfileForm.trainingFreq),
+                goal: editProfileForm.goal
+            });
+
+            // 3. Save Targets
+            await upsertNutritionTargets(userId, newTargets);
+
+            toast.success('Profile and targets updated!');
+            setShowEditProfile(false);
+            window.location.reload(); // Simple reload to refresh all data stores
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            toast.error('Failed to update profile');
+        } finally {
+            setCalculatingTargets(false);
+        }
+    };
+
+    const handleEditProfile = () => {
+        if (!profile) return;
+        setEditProfileForm({
+            weight: profile.weight_kg.toString(),
+            goal: profile.goal,
+            trainingFreq: profile.training_frequency.toString()
+        });
+        setShowEditProfile(true);
     };
 
     const resetQuickItemForm = () => {
@@ -144,104 +239,17 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
 
         if (editingQuickItem) {
             await updateQuickItem(editingQuickItem.id, itemData);
+            toast.success('Quick item updated');
         } else {
             await insertQuickItem({
                 user_id: userId,
                 ...itemData
             });
+            toast.success('Quick item added');
         }
 
         loadQuickItems();
         resetQuickItemForm();
-    };
-
-    const handleDeleteQuickItem = async (id: string) => {
-        if (confirm('Delete this quick item?')) {
-            await deleteQuickItem(id);
-            loadQuickItems();
-        }
-    };
-
-    const handleSaveActivity = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoadingActivity(true);
-
-        try {
-            const result = await upsertActivity({
-                user_id: userId,
-                steps: parseInt(activityForm.steps || '0'),
-                active_energy: parseInt(activityForm.activeEnergy || '0'),
-                workout_description: activityForm.workout || null,
-                activity_date: format(new Date(), 'yyyy-MM-dd'),
-            });
-
-            if (result) {
-                alert('Activity saved!');
-            }
-        } catch (error) {
-            console.error('Error saving activity:', error);
-            alert('Failed to save activity');
-        } finally {
-            setLoadingActivity(false);
-        }
-    };
-
-    const handleSignOut = async () => {
-        if (confirm('Are you sure you want to sign out?')) {
-            await signOut();
-        }
-    };
-
-    const handleEditProfile = () => {
-        if (!profile) return;
-        setEditProfileForm({
-            weight: profile.weight_kg.toString(),
-            goal: profile.goal,
-            trainingFreq: profile.training_frequency.toString()
-        });
-        setShowEditProfile(true);
-    };
-
-    const handleRecalculateProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!profile) return;
-        setCalculatingTargets(true);
-
-        try {
-            // 1. Update Profile
-            await upsertProfile({
-                id: userId,
-                weight_kg: parseFloat(editProfileForm.weight),
-                goal: editProfileForm.goal,
-                training_frequency: parseInt(editProfileForm.trainingFreq),
-                // Keep existing values
-                age: profile.age,
-                height_cm: profile.height_cm,
-                body_fat_percentage: profile.body_fat_percentage
-            });
-
-            // 2. Recalculate Targets
-            const newTargets = await calculateNutritionTargets({
-                age: profile.age,
-                weight_kg: parseFloat(editProfileForm.weight),
-                height_cm: profile.height_cm,
-                body_fat_percentage: profile.body_fat_percentage,
-                training_frequency: parseInt(editProfileForm.trainingFreq),
-                goal: editProfileForm.goal
-            });
-
-            // 3. Save Targets
-            await upsertNutritionTargets(userId, newTargets);
-
-            alert('Profile and targets updated!');
-            setShowEditProfile(false);
-            window.location.reload(); // Simple reload to refresh all data stores
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            alert('Failed to update profile');
-        } finally {
-            setCalculatingTargets(false);
-        }
     };
 
     return (

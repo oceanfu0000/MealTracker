@@ -2,7 +2,8 @@ import { useState, useRef } from 'react';
 import { X, Camera, Upload, Loader2, Search, Calendar } from 'lucide-react';
 import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems } from '../lib/api';
 import { format } from 'date-fns';
-import type { QuickItem } from '../types';
+import { toast } from 'react-hot-toast';
+import { InsertMealLog, QuickItem } from '../types';
 
 interface LogMealModalProps {
     userId: string;
@@ -87,8 +88,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         } catch (error: any) {
             console.error('Error analyzing meal:', error);
 
-            // Optional: show user-friendly error message
-            alert(
+            toast.error(
                 error?.message
                     ? `Meal analysis failed: ${error.message}. Please enter manually.`
                     : 'Failed to analyze meal. Please enter manually.'
@@ -124,7 +124,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             }
         } catch (error: any) {
             console.error('Error analyzing meal by text:', error);
-            alert(
+            toast.error(
                 error?.message
                     ? `Meal analysis failed: ${error.message}. Please enter manually.`
                     : 'Failed to analyze meal. Please enter manually.'
@@ -186,7 +186,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             }
         } catch (error) {
             console.error('Error logging meal:', error);
-            alert('Failed to log meal. Please try again.');
+            toast.error('Failed to log meal. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -230,7 +230,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             }
         } catch (error) {
             console.error('Error logging quick item:', error);
-            alert('Failed to log meal. Please try again.');
+            toast.error('Failed to log meal. Please try again.');
         } finally {
             setLoading(false);
         }
