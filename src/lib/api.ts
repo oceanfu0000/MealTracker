@@ -610,13 +610,30 @@ export async function upsertActivity(activity: InsertManualActivity & { user_id:
 // AI MEAL ANALYSIS (Placeholder for Edge Function)
 // ============================================
 
-export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysis | null> {
+export async function analyzeMealImage(
+    imageBase64: string, 
+    hint?: string, 
+    exclusions?: string[]
+): Promise<MealAnalysis | null> {
     try {
         const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
         if (!openaiKey) {
             console.error('OpenAI API key not configured');
             return null;
         }
+
+        // Build the prompt with optional hint and exclusions
+        let promptText = 'Analyze this meal and provide nutrition estimates.';
+        
+        if (hint) {
+            promptText += ` Hint from user: "${hint}".`;
+        }
+        
+        if (exclusions && exclusions.length > 0) {
+            promptText += ` IMPORTANT: This meal is definitely NOT any of the following: ${exclusions.join(', ')}. Please identify something else.`;
+        }
+        
+        promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.';
 
         const response = await fetch('https://api.openai.com/v1/responses', {
             method: 'POST',
@@ -633,7 +650,7 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
                         content: [
                             {
                                 type: 'input_text',
-                                text: 'Analyze this meal and provide nutrition estimates. Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.'
+                                text: promptText
                             },
                             {
                                 type: 'input_image',
@@ -752,6 +769,155 @@ export async function analyzeMealImage(imageBase64: string): Promise<MealAnalysi
     } catch (error: any) {
         console.error('Error analyzing meal:', error);
         throw new Error(error.message || 'Error analyzing meal');
+    }
+}
+
+// Re-analyze with accumulated exclusions (for "it's not X" corrections)
+export async function reanalyzeMealImage(
+    imageBase64: string,
+    exclusions: string[],
+    hint?: string
+): Promise<MealAnalysis | null> {
+    try {
+        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+        if (!openaiKey) {
+            console.error('OpenAI API key not configured');
+            return null;
+        }
+
+        // Build a more emphatic prompt for re-analysis
+        let promptText = 'Analyze this meal and provide nutrition estimates.';
+        
+        if (hint) {
+            promptText += ` User hint: "${hint}".`;
+        }
+        
+        // Emphasize the exclusions strongly
+        if (exclusions.length > 0) {
+            const exclusionList = exclusions.map(e => `"${e}"`).join(', ');
+            promptText += ` CRITICAL: The user has confirmed this meal is DEFINITELY NOT: ${exclusionList}. You MUST identify a DIFFERENT dish. Think of other similar-looking dishes that are NOT in this exclusion list.`;
+        }
+        
+        promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Asian/Malaysian foods, use typical serving sizes.';
+
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: 'gpt-4.1',
+                max_output_tokens: 300,
+                input: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'input_text',
+                                text: promptText
+                            },
+                            {
+                                type: 'input_image',
+                                image_url: `data:image/jpeg;base64,${imageBase64}`,
+                            }
+                        ]
+                    }
+                ]
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
+            const errorMessage = errorData.error?.message || response.statusText;
+            console.error('OpenAI API Error:', errorData);
+            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+        }
+
+        const result = await response.json();
+
+        // Extract content (same logic as analyzeMealImage)
+        let content = '';
+
+        if (result.output_text) {
+            content = result.output_text.trim();
+        }
+
+        if (!content && Array.isArray(result.output) && result.output.length > 0) {
+            const firstOutput = result.output[0];
+
+            if (firstOutput.text) {
+                content = firstOutput.text;
+            } else if (firstOutput.content) {
+                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
+                    const firstContent = firstOutput.content[0];
+                    if (firstContent.text) {
+                        content = firstContent.text;
+                    } else if (typeof firstContent === 'string') {
+                        content = firstContent;
+                    }
+                } else if (typeof firstOutput.content === 'string') {
+                    content = firstOutput.content;
+                }
+            } else if (firstOutput.type === 'output_text' && firstOutput.text) {
+                content = firstOutput.text;
+            }
+
+            if (!content) {
+                content = result.output
+                    .map((item: any) => {
+                        if (typeof item === 'string') return item;
+                        if (item.text) return item.text;
+                        if (Array.isArray(item.content)) {
+                            return item.content
+                                .map((c: any) => c.text || c)
+                                .join('\n');
+                        }
+                        if (item.content) return item.content;
+                        return '';
+                    })
+                    .join('\n')
+                    .trim();
+            }
+        }
+
+        let contentStr: string;
+        if (typeof content === 'string') {
+            contentStr = content;
+        } else if (typeof content === 'object' && content !== null) {
+            const analysis = content as any;
+            return {
+                description: analysis.description || 'Unknown meal',
+                calories: Math.round(analysis.calories || 0),
+                protein: Math.round(analysis.protein || 0),
+                carbs: Math.round(analysis.carbs || 0),
+                fat: Math.round(analysis.fat || 0),
+                confidence: analysis.confidence || 0.5,
+            };
+        } else {
+            console.warn('OpenAI returned empty or invalid output. Full response:', result);
+            throw new Error('No valid response from OpenAI');
+        }
+
+        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.warn('Could not find JSON in model output:', content);
+            throw new Error('OpenAI returned invalid JSON');
+        }
+
+        const analysis = JSON.parse(jsonMatch[0]);
+
+        return {
+            description: analysis.description || 'Unknown meal',
+            calories: Math.round(analysis.calories || 0),
+            protein: Math.round(analysis.protein || 0),
+            carbs: Math.round(analysis.carbs || 0),
+            fat: Math.round(analysis.fat || 0),
+            confidence: analysis.confidence || 0.5,
+        };
+    } catch (error: any) {
+        console.error('Error re-analyzing meal:', error);
+        throw new Error(error.message || 'Error re-analyzing meal');
     }
 }
 

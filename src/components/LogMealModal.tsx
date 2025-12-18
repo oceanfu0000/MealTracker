@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { X, Camera, Upload, Loader2, Search, Calendar, Plus, Layers, ChevronDown } from 'lucide-react';
-import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems, generateMealGroupId, MEAL_GROUP_OPTIONS } from '../lib/api';
+import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems, generateMealGroupId, MEAL_GROUP_OPTIONS, reanalyzeMealImage } from '../lib/api';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { QuickItem } from '../types';
@@ -36,6 +36,10 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     // Camera/photo tab
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imageHint, setImageHint] = useState(''); // Optional text hint for image analysis
+    const [exclusions, setExclusions] = useState<string[]>([]); // "It's not X" corrections
+    const [correctionInput, setCorrectionInput] = useState(''); // Current correction input
+    const [showCorrectionInput, setShowCorrectionInput] = useState(false); // Show correction UI after analysis
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Manual tab
@@ -91,8 +95,8 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             // Extract base64 from data URL (remove "data:image/jpeg;base64," prefix)
             const base64 = compressed.split(',')[1];
 
-            // Call the meal analysis API
-            const analysis = await analyzeMealImage(base64);
+            // Call the meal analysis API with hint and exclusions
+            const analysis = await analyzeMealImage(base64, imageHint || undefined, exclusions.length > 0 ? exclusions : undefined);
 
             if (analysis) {
                 // Populate the manual form with the analysis
@@ -103,6 +107,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     carbs: analysis.carbs.toString(),
                     fat: analysis.fat.toString(),
                 });
+                setShowCorrectionInput(true); // Show correction option after analysis
                 setActiveTab('manual');
             } else {
                 // If API returns null
@@ -122,6 +127,58 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         } finally {
             setAnalyzing(false);
         }
+    };
+
+    // Handle adding a correction ("it's not X")
+    const handleAddCorrection = () => {
+        if (!correctionInput.trim()) return;
+        const newExclusion = correctionInput.trim();
+        if (!exclusions.includes(newExclusion)) {
+            setExclusions([...exclusions, newExclusion]);
+        }
+        setCorrectionInput('');
+        toast.success(`Added correction: it's not ${newExclusion}`);
+    };
+
+    // Re-analyze with accumulated corrections
+    const handleReanalyze = async () => {
+        if (!imageFile || exclusions.length === 0) return;
+
+        setAnalyzing(true);
+
+        try {
+            const compressed = await compressImage(imageFile);
+            const base64 = compressed.split(',')[1];
+
+            // Call reanalyze API with all accumulated exclusions
+            const analysis = await reanalyzeMealImage(base64, exclusions, imageHint || undefined);
+
+            if (analysis) {
+                setManualForm({
+                    description: analysis.description,
+                    calories: analysis.calories.toString(),
+                    protein: analysis.protein.toString(),
+                    carbs: analysis.carbs.toString(),
+                    fat: analysis.fat.toString(),
+                });
+                toast.success('Re-analyzed with corrections!');
+            }
+        } catch (error: any) {
+            console.error('Error re-analyzing meal:', error);
+            toast.error('Failed to re-analyze. Please enter manually.');
+        } finally {
+            setAnalyzing(false);
+        }
+    };
+
+    // Clear corrections when changing image
+    const handleClearImage = () => {
+        setSelectedImage(null);
+        setImageFile(null);
+        setImageHint('');
+        setExclusions([]);
+        setCorrectionInput('');
+        setShowCorrectionInput(false);
     };
 
     const handleSearchAnalyze = async () => {
@@ -617,15 +674,54 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                             className="w-full h-full object-cover"
                                         />
                                         <button
-                                            onClick={() => {
-                                                setSelectedImage(null);
-                                                setImageFile(null);
-                                            }}
+                                            onClick={handleClearImage}
                                             className="absolute top-2 right-2 p-2 bg-white rounded-lg shadow-lg hover:bg-neutral-100 transition-colors"
                                         >
                                             <X className="w-4 h-4" />
                                         </button>
                                     </div>
+
+                                    {/* Optional hint input for better analysis */}
+                                    <div>
+                                        <label className="label text-sm text-neutral-600">
+                                            Hint (optional) - Help AI identify the meal
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={imageHint}
+                                            onChange={(e) => setImageHint(e.target.value)}
+                                            placeholder="e.g., Malaysian breakfast, bak kut teh, herbal soup"
+                                        />
+                                        <p className="text-xs text-neutral-500 mt-1">
+                                            Add context like cuisine type or dish name if you know it
+                                        </p>
+                                    </div>
+
+                                    {/* Show accumulated exclusions if any */}
+                                    {exclusions.length > 0 && (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                            <p className="text-sm text-amber-800 font-medium mb-2">
+                                                AI will avoid these guesses:
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {exclusions.map((exc, idx) => (
+                                                    <span 
+                                                        key={idx}
+                                                        className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm"
+                                                    >
+                                                        Not {exc}
+                                                        <button
+                                                            onClick={() => setExclusions(exclusions.filter((_, i) => i !== idx))}
+                                                            className="text-amber-600 hover:text-amber-800"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <button
                                         onClick={handleAnalyze}
@@ -638,7 +734,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                 Analyzing with AI...
                                             </span>
                                         ) : (
-                                            'Analyze Meal'
+                                            exclusions.length > 0 ? 'Re-analyze Meal' : 'Analyze Meal'
                                         )}
                                     </button>
 
@@ -695,6 +791,88 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     {/* Manual Tab */}
                     {activeTab === 'manual' && (
                         <form onSubmit={handleManualSubmit} className="space-y-4">
+                            {/* Correction UI - Show when image was analyzed and user can provide corrections */}
+                            {selectedImage && showCorrectionInput && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-3">
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-lg">🤔</span>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-blue-800 font-medium">
+                                                Not quite right? Tell AI what it's NOT
+                                            </p>
+                                            <p className="text-xs text-blue-600 mt-0.5">
+                                                Add corrections and re-analyze. All corrections will be remembered.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Show current exclusions */}
+                                    {exclusions.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {exclusions.map((exc, idx) => (
+                                                <span 
+                                                    key={idx}
+                                                    className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs"
+                                                >
+                                                    ❌ Not {exc}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExclusions(exclusions.filter((_, i) => i !== idx))}
+                                                        className="text-amber-600 hover:text-amber-800"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Add correction input */}
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            className="input flex-1 text-sm py-1.5"
+                                            value={correctionInput}
+                                            onChange={(e) => setCorrectionInput(e.target.value)}
+                                            placeholder="e.g., bak kut teh, herbal soup, tom yum"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAddCorrection();
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAddCorrection}
+                                            disabled={!correctionInput.trim()}
+                                            className="btn btn-secondary text-sm py-1.5 px-3 whitespace-nowrap disabled:opacity-50"
+                                        >
+                                            It's not this
+                                        </button>
+                                    </div>
+
+                                    {/* Re-analyze button */}
+                                    {exclusions.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={handleReanalyze}
+                                            disabled={analyzing}
+                                            className="w-full btn btn-primary text-sm py-2"
+                                        >
+                                            {analyzing ? (
+                                                <span className="flex items-center justify-center gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    Re-analyzing...
+                                                </span>
+                                            ) : (
+                                                `Re-analyze (excluding ${exclusions.length} item${exclusions.length > 1 ? 's' : ''})`
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
                             <div>
                                 <label className="label">Description</label>
                                 <input
