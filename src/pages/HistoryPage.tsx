@@ -1,12 +1,10 @@
-import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { ArrowLeft, Calendar, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchDailyHistoryByRange, fetchMealsForDate, groupMealsForDisplay, DailySummary } from '../lib/api';
 import type { MealLog, GroupedMeal } from '../types';
 import { useStore } from '../store';
-
-// Lazy load heavy card component
-const GroupedMealCard = lazy(() => import('../components/GroupedMealCard'));
+import MealList from '../components/MealList';
 
 interface HistoryPageProps {
     userId: string;
@@ -158,19 +156,6 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
             console.error('Error refreshing day:', error);
         }
     }, [userId, appliedRange.start, appliedRange.end, loadHistory]);
-
-    // Memoize the computed meal card data to avoid recalculating on each render
-    const mealCardData = useMemo(() => {
-        return groupedDayMeals.map((group) => {
-            const otherUngroupedMeals = groupedDayMeals.filter(
-                g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
-            );
-            const existingGroups = groupedDayMeals.filter(
-                g => g.groupId !== null && g.groupId !== group.groupId
-            );
-            return { group, otherUngroupedMeals, existingGroups };
-        });
-    }, [groupedDayMeals]);
 
     const getBarWidth = (current: number, target: number) => {
         if (target <= 0) return 0;
@@ -392,33 +377,16 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                 Meals Logged
                                             </h3>
 
-                                            {loadingMeals ? (
-                                                <div className="flex justify-center py-8">
-                                                    <div className="spinner" />
-                                                </div>
-                                            ) : groupedDayMeals.length === 0 ? (
-                                                <div className="text-center py-6 text-neutral-500 italic">
-                                                    No meals found for this day.
-                                                </div>
-                                            ) : (
-                                                <Suspense fallback={
-                                                    <div className="flex justify-center py-8">
-                                                        <div className="spinner" />
+                                            <MealList
+                                                groupedMeals={groupedDayMeals}
+                                                loading={loadingMeals}
+                                                onDelete={() => refreshDay(day.date)}
+                                                emptyState={
+                                                    <div className="text-center py-6 text-neutral-500 italic">
+                                                        No meals found for this day.
                                                     </div>
-                                                }>
-                                                    <div className="space-y-3">
-                                                        {mealCardData.map(({ group, otherUngroupedMeals, existingGroups }) => (
-                                                            <GroupedMealCard
-                                                                key={group.groupId || group.meals[0].id}
-                                                                group={group}
-                                                                onDelete={() => refreshDay(day.date)}
-                                                                otherUngroupedMeals={otherUngroupedMeals}
-                                                                existingGroups={existingGroups}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </Suspense>
-                                            )}
+                                                }
+                                            />
                                         </div>
                                     )}
                                 </div>
