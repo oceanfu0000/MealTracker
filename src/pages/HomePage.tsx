@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Plus } from 'lucide-react';
 import DailyHeader from '../components/DailyHeader';
 import GroupedMealCard from '../components/GroupedMealCard';
-import LogMealModal from '../components/LogMealModal';
 import { useStore } from '../store';
-import { fetchMealsForDate, calculateDailyTotals, groupMealsForDisplay } from '../lib/api';
+import { fetchMealsAndTotals, groupMealsForDisplay } from '../lib/api';
 import type { GroupedMeal } from '../types';
+
+// Lazy load heavy modal component
+const LogMealModal = lazy(() => import('../components/LogMealModal'));
 
 interface HomePageProps {
     userId: string;
@@ -24,21 +26,37 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
 
     const { selectedDate, setDailyTotals } = useStore();
 
-    const loadMeals = async () => {
+    const loadMeals = useCallback(async () => {
         setLoading(true);
-        const fetchedMeals = await fetchMealsForDate(userId, selectedDate);
-        const grouped = groupMealsForDisplay(fetchedMeals);
-        setGroupedMeals(grouped);
-
-        const totals = await calculateDailyTotals(userId, selectedDate);
-        setDailyTotals(totals);
-
-        setLoading(false);
-    };
+        try {
+            // Single combined fetch - avoids duplicate API calls
+            const { meals, totals } = await fetchMealsAndTotals(userId, selectedDate);
+            const grouped = groupMealsForDisplay(meals);
+            setGroupedMeals(grouped);
+            setDailyTotals(totals);
+        } catch (error) {
+            console.error('Error loading meals:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [userId, selectedDate, setDailyTotals]);
 
     useEffect(() => {
         loadMeals();
-    }, [userId, selectedDate]);
+    }, [loadMeals]);
+
+    // Memoize derived data for meal cards
+    const mealCardData = useMemo(() => {
+        return groupedMeals.map((group) => {
+            const otherUngroupedMeals = groupedMeals.filter(
+                g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
+            );
+            const existingGroups = groupedMeals.filter(
+                g => g.groupId !== null && g.groupId !== group.groupId
+            );
+            return { group, otherUngroupedMeals, existingGroups };
+        });
+    }, [groupedMeals]);
 
     return (
         <div className="min-h-screen bg-neutral-50 pb-32">
@@ -83,27 +101,15 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {groupedMeals.map((group) => {
-                                    // Get other ungrouped meals for grouping feature (exclude current meal)
-                                    const otherUngroupedMeals = groupedMeals.filter(
-                                        g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
-                                    );
-                                    
-                                    // Get existing groups (exclude current group if it's a group)
-                                    const existingGroups = groupedMeals.filter(
-                                        g => g.groupId !== null && g.groupId !== group.groupId
-                                    );
-                                    
-                                    return (
-                                        <GroupedMealCard
-                                            key={group.groupId || group.meals[0].id}
-                                            group={group}
-                                            onDelete={loadMeals}
-                                            otherUngroupedMeals={otherUngroupedMeals}
-                                            existingGroups={existingGroups}
-                                        />
-                                    );
-                                })}
+                                {mealCardData.map(({ group, otherUngroupedMeals, existingGroups }) => (
+                                    <GroupedMealCard
+                                        key={group.groupId || group.meals[0].id}
+                                        group={group}
+                                        onDelete={loadMeals}
+                                        otherUngroupedMeals={otherUngroupedMeals}
+                                        existingGroups={existingGroups}
+                                    />
+                                ))}
                             </div>
                         )}
                     </>
@@ -121,13 +127,19 @@ export default function HomePage({ userId, onModalChange }: HomePageProps) {
                 </button>
             )}
 
-            {/* Log Meal Modal */}
+            {/* Log Meal Modal - Lazy loaded with Suspense */}
             {showLogModal && (
-                <LogMealModal
-                    userId={userId}
-                    onClose={() => handleModalChange(false)}
-                    onMealLogged={loadMeals}
-                />
+                <Suspense fallback={
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="spinner" style={{ width: '32px', height: '32px' }} />
+                    </div>
+                }>
+                    <LogMealModal
+                        userId={userId}
+                        onClose={() => handleModalChange(false)}
+                        onMealLogged={loadMeals}
+                    />
+                </Suspense>
             )}
         </div>
     );

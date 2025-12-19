@@ -401,9 +401,8 @@ export async function deleteMeal(id: string): Promise<boolean> {
     return true;
 }
 
-export async function calculateDailyTotals(userId: string, date: Date): Promise<DailyTotals> {
-    const meals = await fetchMealsForDate(userId, date);
-
+// Calculate daily totals from pre-fetched meals (synchronous, no API call)
+export function calculateDailyTotalsFromMeals(meals: MealLog[]): DailyTotals {
     return meals.reduce(
         (totals, meal) => ({
             calories: totals.calories + meal.calories,
@@ -414,6 +413,18 @@ export async function calculateDailyTotals(userId: string, date: Date): Promise<
         }),
         { calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 }
     );
+}
+
+// Combined fetch - returns both meals and totals in a single API call
+export async function fetchMealsAndTotals(userId: string, date: Date): Promise<{ meals: MealLog[]; totals: DailyTotals }> {
+    const meals = await fetchMealsForDate(userId, date);
+    const totals = calculateDailyTotalsFromMeals(meals);
+    return { meals, totals };
+}
+
+export async function calculateDailyTotals(userId: string, date: Date): Promise<DailyTotals> {
+    const meals = await fetchMealsForDate(userId, date);
+    return calculateDailyTotalsFromMeals(meals);
 }
 
 // Group meals by meal_group_id for display
@@ -1128,13 +1139,21 @@ export async function fetchDailyHistory(userId: string, days: number = 7): Promi
     return fetchDailyHistoryByRange(userId, startDate, endDate);
 }
 
+// Helper to get local date string (YYYY-MM-DD) from a Date object
+function getLocalDateString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // Optimized version with date range for faster loading
 export async function fetchDailyHistoryByRange(
     userId: string, 
     startDate: Date, 
     endDate: Date
 ): Promise<DailySummary[]> {
-    // Normalize dates to start/end of day
+    // Normalize dates to start/end of day in local time
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
@@ -1156,17 +1175,17 @@ export async function fetchDailyHistoryByRange(
 
     const meals = data as Pick<MealLog, 'logged_at' | 'calories' | 'protein' | 'carbs' | 'fat'>[];
 
-    // Calculate number of days in range
-    const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    // Calculate number of days in range (add 1 to include both start and end dates)
+    const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     
-    // Group by date
+    // Group by date using local dates consistently
     const historyMap = new Map<string, DailySummary>();
 
     // Initialize all days in range with 0
     for (let i = 0; i < diffDays; i++) {
         const d = new Date(start);
         d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(d);
         historyMap.set(dateStr, {
             date: new Date(d),
             calories: 0,
@@ -1177,9 +1196,10 @@ export async function fetchDailyHistoryByRange(
         });
     }
 
-    // Aggregate meals
+    // Aggregate meals using local date for grouping
     meals?.forEach(meal => {
-        const dateStr = new Date(meal.logged_at).toISOString().split('T')[0];
+        const mealDate = new Date(meal.logged_at);
+        const dateStr = getLocalDateString(mealDate);
         const daySummary = historyMap.get(dateStr);
         if (daySummary) {
             daySummary.calories += meal.calories;
