@@ -317,9 +317,14 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                             <div>
                                                 <div className="flex justify-between text-sm mb-1">
                                                     <span className="text-neutral-600">Calories</span>
-                                                    <span className="font-medium">
-                                                        {Math.round(day.calories)} / {nutritionTargets?.calories_target}
-                                                    </span>
+                                                    <div className="text-right">
+                                                        <span className="font-medium">
+                                                            {Math.round(day.calories)} / {nutritionTargets?.calories_target}
+                                                        </span>
+                                                        <span className={`text-xs ml-1 ${day.calories > (nutritionTargets?.calories_target || 2000) ? 'text-red-500' : 'text-neutral-500'}`}>
+                                                            ({day.calories > (nutritionTargets?.calories_target || 2000) ? '+' : ''}{Math.abs(Math.round((nutritionTargets?.calories_target || 2000) - day.calories))} {day.calories > (nutritionTargets?.calories_target || 2000) ? 'over' : 'left'})
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
                                                     <div
@@ -333,7 +338,12 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                             <div className="grid grid-cols-3 gap-3 pt-2">
                                                 <div>
                                                     <div className="text-xs text-neutral-500 mb-1">Protein</div>
-                                                    <div className="text-sm font-medium">{Math.round(day.protein)}g</div>
+                                                    <div className="text-sm font-medium">
+                                                        {Math.round(day.protein)}g
+                                                        <span className={`text-xs ml-1 ${day.protein > (nutritionTargets?.protein_target || 150) ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                            ({day.protein > (nutritionTargets?.protein_target || 150) ? '+' : ''}{Math.abs(Math.round((nutritionTargets?.protein_target || 150) - day.protein))}g {day.protein > (nutritionTargets?.protein_target || 150) ? 'over' : 'left'})
+                                                        </span>
+                                                    </div>
                                                     <div className="h-1 bg-neutral-100 rounded-full mt-1 overflow-hidden">
                                                         <div
                                                             className="h-full bg-accent-500"
@@ -343,7 +353,12 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                 </div>
                                                 <div>
                                                     <div className="text-xs text-neutral-500 mb-1">Carbs</div>
-                                                    <div className="text-sm font-medium">{Math.round(day.carbs)}g</div>
+                                                    <div className="text-sm font-medium">
+                                                        {Math.round(day.carbs)}g
+                                                        <span className={`text-xs ml-1 ${day.carbs > (nutritionTargets?.carbs_target || 200) ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                            ({day.carbs > (nutritionTargets?.carbs_target || 200) ? '+' : ''}{Math.abs(Math.round((nutritionTargets?.carbs_target || 200) - day.carbs))}g {day.carbs > (nutritionTargets?.carbs_target || 200) ? 'over' : 'left'})
+                                                        </span>
+                                                    </div>
                                                     <div className="h-1 bg-neutral-100 rounded-full mt-1 overflow-hidden">
                                                         <div
                                                             className="h-full bg-blue-500"
@@ -353,7 +368,12 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                 </div>
                                                 <div>
                                                     <div className="text-xs text-neutral-500 mb-1">Fat</div>
-                                                    <div className="text-sm font-medium">{Math.round(day.fat)}g</div>
+                                                    <div className="text-sm font-medium">
+                                                        {Math.round(day.fat)}g
+                                                        <span className={`text-xs ml-1 ${day.fat > (nutritionTargets?.fat_target || 60) ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                            ({day.fat > (nutritionTargets?.fat_target || 60) ? '+' : ''}{Math.abs(Math.round((nutritionTargets?.fat_target || 60) - day.fat))}g {day.fat > (nutritionTargets?.fat_target || 60) ? 'over' : 'left'})
+                                                        </span>
+                                                    </div>
                                                     <div className="h-1 bg-neutral-100 rounded-full mt-1 overflow-hidden">
                                                         <div
                                                             className="h-full bg-purple-500"
