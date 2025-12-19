@@ -1269,11 +1269,11 @@ Format your response in a clear, readable way with bullet points where appropria
             },
             body: JSON.stringify({
                 model: 'gpt-4.1-nano',
+                max_tokens: 300,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: question }
                 ],
-                max_output_tokens: 400,
                 temperature: 0.7,
             }),
         });
