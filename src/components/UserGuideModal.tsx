@@ -11,7 +11,8 @@ import {
     Utensils,
     Sparkles,
     Users,
-    Layers
+    Layers,
+    MessageCircle
 } from 'lucide-react';
 
 interface UserGuideModalProps {
@@ -75,6 +76,14 @@ const guideSteps: GuideStep[] = [
         example: "Combine: Cai png + Teh C Peng = 'Lunch'. All items grouped and totals calculated!",
         tip: "Tap the 'Combine' button in the header, name your meal, then add items from any tab. Perfect for meals with drinks or sides! 🍽️",
         color: "from-teal-500 to-cyan-500"
+    },
+    {
+        icon: <MessageCircle className="w-12 h-12" />,
+        title: "🤖 AI Nutrition Assistant",
+        description: "Not sure what to eat? The FAQ tab has an AI-powered assistant that suggests meals based on your remaining calories and macros for the day!",
+        example: "Ask: \"What should I eat for my next meal?\" or \"Plan my meals for the rest of today\" - get personalized suggestions!",
+        tip: "Enter your location to get locally relevant food suggestions. Answers are cached for the day - hit 'Start Fresh' for new recommendations! 🍜",
+        color: "from-violet-500 to-purple-500"
     },
     {
         icon: <Target className="w-12 h-12" />,
