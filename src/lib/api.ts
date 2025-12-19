@@ -1229,6 +1229,7 @@ export interface FAQContext {
     fatConsumed: number;
     location?: string;
     goal?: string;
+    mealsLeft?: number;
 }
 
 export async function askFAQQuestion(
@@ -1256,9 +1257,11 @@ The user has the following nutrition data for today:
 - Fat target: ${context.fatTarget}g, consumed: ${context.fatConsumed}g, remaining: ${remainingFat}g
 ${context.location ? `- User's location: ${context.location}` : ''}
 ${context.goal ? `- User's goal: ${context.goal}` : ''}
+${context.mealsLeft ? `- Meals left today: ${context.mealsLeft}` : ''}
 
 Provide helpful, practical advice based on this data. Be concise but informative. 
 When suggesting foods, consider the user's location for locally available options.
+${context.mealsLeft ? `Distribute the remaining calories and macros across ${context.mealsLeft} meal${context.mealsLeft > 1 ? 's' : ''}.` : ''}
 Format your response in a clear, readable way with bullet points where appropriate.`;
 
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1269,7 +1272,7 @@ Format your response in a clear, readable way with bullet points where appropria
             },
             body: JSON.stringify({
                 model: 'gpt-4.1-nano',
-                max_tokens: 300,
+                max_tokens: 700,
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: question }

@@ -23,6 +23,7 @@ interface FAQItem {
     title: string;
     getQuestion: (mealsLeft?: number) => string;
     needsLocation: boolean;
+    needsMealsLeft?: boolean;
 }
 
 const FAQ_QUESTIONS: FAQItem[] = [
@@ -45,6 +46,7 @@ const FAQ_QUESTIONS: FAQItem[] = [
             return `Based on my remaining calories and macros for today, plan out what I should eat for the rest of the day.${mealsInfo} Please suggest specific dishes or foods available in my location for each remaining meal, distributing my remaining calories and macros appropriately. Include approximate nutrition values for each suggestion.`;
         },
         needsLocation: true,
+        needsMealsLeft: true,
     },
     {
         id: 'healthy-snacks',
@@ -168,8 +170,17 @@ export default function FAQPage() {
             return;
         }
 
+        // Collect all missing required fields
+        const missingFields: string[] = [];
         if (faq.needsLocation && !location.trim()) {
-            setError('Please enter your location for this question.');
+            missingFields.push('your location');
+        }
+        if (faq.needsMealsLeft && !mealsLeft.trim()) {
+            missingFields.push('meals left today');
+        }
+
+        if (missingFields.length > 0) {
+            setError(`Please enter ${missingFields.join(' and ')} for this question.`);
             return;
         }
 
@@ -190,6 +201,7 @@ export default function FAQPage() {
                 fatConsumed: dailyTotals.fat,
                 location: location.trim() || undefined,
                 goal: profile?.goal || undefined,
+                mealsLeft: mealsLeftNum,
             };
 
             const question = faq.getQuestion(mealsLeftNum);
@@ -291,10 +303,15 @@ export default function FAQPage() {
                         <input
                             type="number"
                             value={mealsLeft}
-                            onChange={(e) => setMealsLeft(e.target.value)}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '' || (parseInt(val, 10) >= 1 && parseInt(val, 10) <= 5)) {
+                                    setMealsLeft(val);
+                                }
+                            }}
                             placeholder="e.g., 2"
                             min="1"
-                            max="10"
+                            max="5"
                             className="input w-32"
                         />
                         <p className="text-xs text-neutral-500 mt-1">
@@ -374,9 +391,14 @@ export default function FAQPage() {
                                 </div>
                                 <div className="flex-1">
                                     <span className="font-medium text-neutral-900">{faq.title}</span>
-                                    {faq.needsLocation && !location.trim() && (
-                                        <span className="ml-2 text-xs text-amber-600">(location needed)</span>
-                                    )}
+                                    {(faq.needsLocation && !location.trim()) || (faq.needsMealsLeft && !mealsLeft.trim()) ? (
+                                        <span className="ml-2 text-xs text-amber-600">
+                                            ({[
+                                                faq.needsLocation && !location.trim() ? 'location' : null,
+                                                faq.needsMealsLeft && !mealsLeft.trim() ? 'meals left' : null
+                                            ].filter(Boolean).join(' & ')} needed)
+                                        </span>
+                                    ) : null}
                                 </div>
                                 {responses[faq.id] && (
                                     expandedId === faq.id 
