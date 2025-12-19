@@ -1,10 +1,12 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { ArrowLeft, Calendar, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchDailyHistoryByRange, fetchMealsForDate, groupMealsForDisplay, DailySummary } from '../lib/api';
 import type { MealLog, GroupedMeal } from '../types';
 import { useStore } from '../store';
-import GroupedMealCard from '../components/GroupedMealCard';
+
+// Lazy load heavy card component
+const GroupedMealCard = lazy(() => import('../components/GroupedMealCard'));
 
 interface HistoryPageProps {
     userId: string;
@@ -44,18 +46,23 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
     // Cache for loaded meals to avoid re-fetching
     const [mealsCache, setMealsCache] = useState<Map<string, MealLog[]>>(new Map());
 
-    useEffect(() => {
-        loadHistory(appliedRange.start, appliedRange.end);
-    }, [userId, appliedRange]);
-
-    const loadHistory = async (start: string, end: string) => {
+    const loadHistory = useCallback(async (start: string, end: string) => {
         setLoading(true);
         setExpandedDate(null);
         setGroupedDayMeals([]);
-        const data = await fetchDailyHistoryByRange(userId, new Date(start), new Date(end));
-        setHistory(data);
-        setLoading(false);
-    };
+        try {
+            const data = await fetchDailyHistoryByRange(userId, new Date(start), new Date(end));
+            setHistory(data);
+        } catch (error) {
+            console.error('Error loading history:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [userId]);
+
+    useEffect(() => {
+        loadHistory(appliedRange.start, appliedRange.end);
+    }, [loadHistory, appliedRange]);
 
     // Validate and apply date range
     const applyDateRange = useCallback(() => {
@@ -133,7 +140,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
         }
     };
 
-    const refreshDay = async (date: Date) => {
+    const refreshDay = useCallback(async (date: Date) => {
         const cacheKey = date.toISOString().split('T')[0];
         // Clear cache for this day
         setMealsCache(prev => {
@@ -142,11 +149,28 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
             return newCache;
         });
         // Reload meals and history
-        const meals = await fetchMealsForDate(userId, date);
-        setGroupedDayMeals(groupMealsForDisplay(meals));
-        setMealsCache(prev => new Map(prev).set(cacheKey, meals));
-        loadHistory(appliedRange.start, appliedRange.end);
-    };
+        try {
+            const meals = await fetchMealsForDate(userId, date);
+            setGroupedDayMeals(groupMealsForDisplay(meals));
+            setMealsCache(prev => new Map(prev).set(cacheKey, meals));
+            loadHistory(appliedRange.start, appliedRange.end);
+        } catch (error) {
+            console.error('Error refreshing day:', error);
+        }
+    }, [userId, appliedRange.start, appliedRange.end, loadHistory]);
+
+    // Memoize the computed meal card data to avoid recalculating on each render
+    const mealCardData = useMemo(() => {
+        return groupedDayMeals.map((group) => {
+            const otherUngroupedMeals = groupedDayMeals.filter(
+                g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
+            );
+            const existingGroups = groupedDayMeals.filter(
+                g => g.groupId !== null && g.groupId !== group.groupId
+            );
+            return { group, otherUngroupedMeals, existingGroups };
+        });
+    }, [groupedDayMeals]);
 
     const getBarWidth = (current: number, target: number) => {
         if (target <= 0) return 0;
@@ -357,19 +381,13 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                     No meals found for this day.
                                                 </div>
                                             ) : (
-                                                <div className="space-y-3">
-                                                    {groupedDayMeals.map((group) => {
-                                                        // Get other ungrouped meals for grouping feature
-                                                        const otherUngroupedMeals = groupedDayMeals.filter(
-                                                            g => g.groupId === null && g.meals[0].id !== group.meals[0]?.id
-                                                        );
-                                                        
-                                                        // Get existing groups
-                                                        const existingGroups = groupedDayMeals.filter(
-                                                            g => g.groupId !== null && g.groupId !== group.groupId
-                                                        );
-
-                                                        return (
+                                                <Suspense fallback={
+                                                    <div className="flex justify-center py-8">
+                                                        <div className="spinner" />
+                                                    </div>
+                                                }>
+                                                    <div className="space-y-3">
+                                                        {mealCardData.map(({ group, otherUngroupedMeals, existingGroups }) => (
                                                             <GroupedMealCard
                                                                 key={group.groupId || group.meals[0].id}
                                                                 group={group}
@@ -377,9 +395,9 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                                 otherUngroupedMeals={otherUngroupedMeals}
                                                                 existingGroups={existingGroups}
                                                             />
-                                                        );
-                                                    })}
-                                                </div>
+                                                        ))}
+                                                    </div>
+                                                </Suspense>
                                             )}
                                         </div>
                                     )}
