@@ -11,6 +11,7 @@ interface MacroProgressProps {
 function MacroProgress({ label, current, target, color, unit = 'g' }: MacroProgressProps) {
     const percentage = target > 0 ? Math.min((current / target) * 100, 100) : 0;
     const isOver = current > target;
+    const remaining = Math.round(target - current);
 
     const colorClasses = {
         primary: 'bg-primary-600',
@@ -23,9 +24,14 @@ function MacroProgress({ label, current, target, color, unit = 'g' }: MacroProgr
         <div>
             <div className="flex justify-between items-baseline mb-1">
                 <span className="text-xs font-medium text-neutral-600">{label}</span>
-                <span className={`text-sm font-bold ${isOver ? 'text-red-600' : 'text-neutral-900'}`}>
-                    {Math.round(current)}/{target}{unit}
-                </span>
+                <div className="text-right">
+                    <span className={`text-sm font-bold ${isOver ? 'text-red-600' : 'text-neutral-900'}`}>
+                        {Math.round(current)}/{target}{unit}
+                    </span>
+                    <span className={`text-xs ml-1 ${isOver ? 'text-red-500' : 'text-neutral-500'}`}>
+                        ({isOver ? '+' : ''}{Math.abs(remaining)}{unit} {isOver ? 'over' : 'left'})
+                    </span>
+                </div>
             </div>
             <div className="progress-bar">
                 <div
