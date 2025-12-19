@@ -1214,3 +1214,81 @@ export async function fetchDailyHistoryByRange(
     return Array.from(historyMap.values()).sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
+// ============================================
+// FAQ AI ASSISTANT
+// ============================================
+
+export interface FAQContext {
+    caloriesTarget: number;
+    caloriesConsumed: number;
+    proteinTarget: number;
+    proteinConsumed: number;
+    carbsTarget: number;
+    carbsConsumed: number;
+    fatTarget: number;
+    fatConsumed: number;
+    location?: string;
+    goal?: string;
+}
+
+export async function askFAQQuestion(
+    question: string,
+    context: FAQContext
+): Promise<string> {
+    try {
+        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
+        if (!openaiKey) {
+            throw new Error('OpenAI API key not configured');
+        }
+
+        const remainingCalories = context.caloriesTarget - context.caloriesConsumed;
+        const remainingProtein = context.proteinTarget - context.proteinConsumed;
+        const remainingCarbs = context.carbsTarget - context.carbsConsumed;
+        const remainingFat = context.fatTarget - context.fatConsumed;
+
+        const systemPrompt = `You are a helpful nutrition assistant for a meal tracking app. 
+The user has the following nutrition data for today:
+- Daily calorie target: ${context.caloriesTarget} kcal
+- Calories consumed so far: ${context.caloriesConsumed} kcal
+- Remaining calories: ${remainingCalories} kcal
+- Protein target: ${context.proteinTarget}g, consumed: ${context.proteinConsumed}g, remaining: ${remainingProtein}g
+- Carbs target: ${context.carbsTarget}g, consumed: ${context.carbsConsumed}g, remaining: ${remainingCarbs}g
+- Fat target: ${context.fatTarget}g, consumed: ${context.fatConsumed}g, remaining: ${remainingFat}g
+${context.location ? `- User's location: ${context.location}` : ''}
+${context.goal ? `- User's goal: ${context.goal}` : ''}
+
+Provide helpful, practical advice based on this data. Be concise but informative. 
+When suggesting foods, consider the user's location for locally available options.
+Format your response in a clear, readable way with bullet points where appropriate.`;
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${openaiKey}`,
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: question }
+                ],
+                max_tokens: 800,
+                temperature: 0.7,
+            }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
+            const errorMessage = errorData.error?.message || response.statusText;
+            throw new Error(`API error: ${errorMessage}`);
+        }
+
+        const result = await response.json();
+        return result.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+    } catch (error: any) {
+        console.error('Error asking FAQ question:', error);
+        throw new Error(error.message || 'Error getting AI response');
+    }
+}
+

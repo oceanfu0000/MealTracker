@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Home, User, Clock } from 'lucide-react';
+import { Home, User, Clock, MessageCircle } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useStore } from './store';
 import { getProfile, getNutritionTargets, markDisclaimerSeen } from './lib/api';
@@ -8,6 +8,7 @@ import AuthPage from './pages/AuthPage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
+import FAQPage from './pages/FAQPage';
 import ProfileSetup from './components/ProfileSetup';
 import DisclaimerModal from './components/DisclaimerModal';
 import UserGuideModal from './components/UserGuideModal';
@@ -97,6 +98,7 @@ function App() {
 
     const isProfilePage = location.pathname === '/profile';
     const isHistoryPage = location.pathname === '/history';
+    const isFAQPage = location.pathname === '/faq';
 
     return (
         <div className="min-h-screen">
@@ -113,6 +115,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<HomePage userId={user.id} onModalChange={setIsModalOpen} />} />
                 <Route path="/history" element={<HistoryPage userId={user.id} />} />
+                <Route path="/faq" element={<FAQPage />} />
                 <Route path="/profile" element={<ProfilePage userId={user.id} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -123,10 +126,11 @@ function App() {
                     <div className="max-w-4xl mx-auto flex">
                         <button
                             onClick={() => navigate('/')}
-                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${!isProfilePage
-                                ? 'text-primary-600'
-                                : 'text-neutral-400 hover:text-neutral-600'
-                                }`}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
+                                !isProfilePage && !isHistoryPage && !isFAQPage
+                                    ? 'text-primary-600'
+                                    : 'text-neutral-400 hover:text-neutral-600'
+                            }`}
                         >
                             <Home className="w-6 h-6" />
                             <span className="text-xs font-medium">Home</span>
@@ -141,6 +145,17 @@ function App() {
                         >
                             <Clock className="w-6 h-6" />
                             <span className="text-xs font-medium">History</span>
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/faq')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isFAQPage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                                }`}
+                        >
+                            <MessageCircle className="w-6 h-6" />
+                            <span className="text-xs font-medium">FAQ</span>
                         </button>
 
                         <button
