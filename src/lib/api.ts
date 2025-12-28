@@ -1315,16 +1315,13 @@ export interface BarcodeProduct {
 export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProduct> {
     try {
         // Use Open Food Facts API (free, no API key required)
+        // Note: No custom headers to avoid CORS preflight issues
         const response = await fetch(
-            `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
-            {
-                headers: {
-                    'User-Agent': 'MealTracker/1.0 - Contact: your-email@example.com',
-                },
-            }
+            `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`
         );
 
         if (!response.ok) {
+            console.error('Open Food Facts API error:', response.status, response.statusText);
             return {
                 barcode,
                 name: 'Product not found',
@@ -1337,6 +1334,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
         }
 
         const data = await response.json();
+        console.log('Open Food Facts response:', data);
 
         if (data.status !== 1 || !data.product) {
             return {
