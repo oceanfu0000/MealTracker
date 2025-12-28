@@ -1295,3 +1295,206 @@ Format your response in a clear, readable way with bullet points where appropria
     }
 }
 
+// ============================================
+// BARCODE FOOD LOOKUP (Open Food Facts API)
+// ============================================
+
+export interface BarcodeProduct {
+    barcode: string;
+    name: string;
+    brand?: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    servingSize?: string;
+    imageUrl?: string;
+    found: boolean;
+}
+
+export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProduct> {
+    try {
+        // Use Open Food Facts API (free, no API key required)
+        const response = await fetch(
+            `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
+            {
+                headers: {
+                    'User-Agent': 'MealTracker/1.0 - Contact: your-email@example.com',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            return {
+                barcode,
+                name: 'Product not found',
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0,
+                found: false,
+            };
+        }
+
+        const data = await response.json();
+
+        if (data.status !== 1 || !data.product) {
+            return {
+                barcode,
+                name: 'Product not found',
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fat: 0,
+                found: false,
+            };
+        }
+
+        const product = data.product;
+        const nutriments = product.nutriments || {};
+
+        // Get values per 100g (standard) or per serving
+        const calories = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
+        const protein = Math.round(nutriments.proteins_100g || nutriments.proteins || 0);
+        const carbs = Math.round(nutriments.carbohydrates_100g || nutriments.carbohydrates || 0);
+        const fat = Math.round(nutriments.fat_100g || nutriments.fat || 0);
+
+        return {
+            barcode,
+            name: product.product_name || product.product_name_en || 'Unknown Product',
+            brand: product.brands || undefined,
+            calories,
+            protein,
+            carbs,
+            fat,
+            servingSize: product.serving_size || '100g',
+            imageUrl: product.image_front_small_url || product.image_url || undefined,
+            found: true,
+        };
+    } catch (error) {
+        console.error('Error looking up barcode:', error);
+        return {
+            barcode,
+            name: 'Error looking up product',
+            calories: 0,
+            protein: 0,
+            carbs: 0,
+            fat: 0,
+            found: false,
+        };
+    }
+}
+
+// ============================================
+// WEEKLY & MONTHLY AVERAGES
+// ============================================
+
+export interface NutritionAverages {
+    avgCalories: number;
+    avgProtein: number;
+    avgCarbs: number;
+    avgFat: number;
+    totalDays: number;
+    daysWithMeals: number;
+    totalMeals: number;
+}
+
+export async function getWeeklyAverages(userId: string, date: Date): Promise<NutritionAverages> {
+    // Get the start of the week (Monday) containing the given date
+    const startOfWeek = new Date(date);
+    const dayOfWeek = startOfWeek.getDay();
+    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Adjust for Monday start
+    startOfWeek.setDate(startOfWeek.getDate() - diff);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // End of week (Sunday)
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(endOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const history = await fetchDailyHistoryByRange(userId, startOfWeek, endOfWeek);
+
+    const daysWithMeals = history.filter(day => day.mealCount > 0);
+    const totalMeals = history.reduce((sum, day) => sum + day.mealCount, 0);
+
+    if (daysWithMeals.length === 0) {
+        return {
+            avgCalories: 0,
+            avgProtein: 0,
+            avgCarbs: 0,
+            avgFat: 0,
+            totalDays: 7,
+            daysWithMeals: 0,
+            totalMeals: 0,
+        };
+    }
+
+    const totals = daysWithMeals.reduce(
+        (acc, day) => ({
+            calories: acc.calories + day.calories,
+            protein: acc.protein + day.protein,
+            carbs: acc.carbs + day.carbs,
+            fat: acc.fat + day.fat,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+
+    return {
+        avgCalories: Math.round(totals.calories / daysWithMeals.length),
+        avgProtein: Math.round(totals.protein / daysWithMeals.length),
+        avgCarbs: Math.round(totals.carbs / daysWithMeals.length),
+        avgFat: Math.round(totals.fat / daysWithMeals.length),
+        totalDays: 7,
+        daysWithMeals: daysWithMeals.length,
+        totalMeals,
+    };
+}
+
+export async function getMonthlyAverages(userId: string, month: number, year: number): Promise<NutritionAverages> {
+    // month is 1-indexed (1 = January, 12 = December)
+    const startOfMonth = new Date(year, month - 1, 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    // Last day of the month
+    const endOfMonth = new Date(year, month, 0); // Day 0 of next month = last day of current month
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const totalDaysInMonth = endOfMonth.getDate();
+
+    const history = await fetchDailyHistoryByRange(userId, startOfMonth, endOfMonth);
+
+    const daysWithMeals = history.filter(day => day.mealCount > 0);
+    const totalMeals = history.reduce((sum, day) => sum + day.mealCount, 0);
+
+    if (daysWithMeals.length === 0) {
+        return {
+            avgCalories: 0,
+            avgProtein: 0,
+            avgCarbs: 0,
+            avgFat: 0,
+            totalDays: totalDaysInMonth,
+            daysWithMeals: 0,
+            totalMeals: 0,
+        };
+    }
+
+    const totals = daysWithMeals.reduce(
+        (acc, day) => ({
+            calories: acc.calories + day.calories,
+            protein: acc.protein + day.protein,
+            carbs: acc.carbs + day.carbs,
+            fat: acc.fat + day.fat,
+        }),
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+
+    return {
+        avgCalories: Math.round(totals.calories / daysWithMeals.length),
+        avgProtein: Math.round(totals.protein / daysWithMeals.length),
+        avgCarbs: Math.round(totals.carbs / daysWithMeals.length),
+        avgFat: Math.round(totals.fat / daysWithMeals.length),
+        totalDays: totalDaysInMonth,
+        daysWithMeals: daysWithMeals.length,
+        totalMeals,
+    };
+}

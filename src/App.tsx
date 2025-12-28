@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Home, User, Clock, MessageCircle } from 'lucide-react';
+import { Home, User, Clock, MessageCircle, BarChart3 } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useStore } from './store';
 import { getProfile, getNutritionTargets, markDisclaimerSeen } from './lib/api';
@@ -9,6 +9,7 @@ import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
 import FAQPage from './pages/FAQPage';
+import StatsPage from './pages/StatsPage';
 import ProfileSetup from './components/ProfileSetup';
 import DisclaimerModal from './components/DisclaimerModal';
 import UserGuideModal from './components/UserGuideModal';
@@ -99,6 +100,7 @@ function App() {
     const isProfilePage = location.pathname === '/profile';
     const isHistoryPage = location.pathname === '/history';
     const isFAQPage = location.pathname === '/faq';
+    const isStatsPage = location.pathname === '/stats';
 
     return (
         <div className="min-h-screen">
@@ -115,6 +117,7 @@ function App() {
             <Routes>
                 <Route path="/" element={<HomePage userId={user.id} onModalChange={setIsModalOpen} />} />
                 <Route path="/history" element={<HistoryPage userId={user.id} />} />
+                <Route path="/stats" element={<StatsPage userId={user.id} />} />
                 <Route path="/faq" element={<FAQPage />} />
                 <Route path="/profile" element={<ProfilePage userId={user.id} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -127,7 +130,7 @@ function App() {
                         <button
                             onClick={() => navigate('/')}
                             className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${
-                                !isProfilePage && !isHistoryPage && !isFAQPage
+                                !isProfilePage && !isHistoryPage && !isFAQPage && !isStatsPage
                                     ? 'text-primary-600'
                                     : 'text-neutral-400 hover:text-neutral-600'
                             }`}
@@ -145,6 +148,17 @@ function App() {
                         >
                             <Clock className="w-6 h-6" />
                             <span className="text-xs font-medium">History</span>
+                        </button>
+
+                        <button
+                            onClick={() => navigate('/stats')}
+                            className={`flex-1 flex flex-col items-center gap-1 py-3 transition-colors ${isStatsPage
+                                ? 'text-primary-600'
+                                : 'text-neutral-400 hover:text-neutral-600'
+                                }`}
+                        >
+                            <BarChart3 className="w-6 h-6" />
+                            <span className="text-xs font-medium">Stats</span>
                         </button>
 
                         <button

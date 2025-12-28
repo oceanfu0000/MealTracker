@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
-import { X, Camera, Upload, Loader2, Search, Calendar, Plus, Layers, ChevronDown } from 'lucide-react';
-import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems, generateMealGroupId, MEAL_GROUP_OPTIONS, reanalyzeMealImage } from '../lib/api';
+import { X, Camera, Upload, Loader2, Search, Calendar, Plus, Layers, ChevronDown, Barcode } from 'lucide-react';
+import { insertMeal, insertQuickItem, analyzeMealImage, analyzeMealByText, compressImage, fetchQuickItems, generateMealGroupId, MEAL_GROUP_OPTIONS, reanalyzeMealImage, lookupFoodByBarcode, BarcodeProduct } from '../lib/api';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { QuickItem } from '../types';
@@ -25,7 +25,7 @@ interface LogMealModalProps {
     onMealLogged: () => void;
 }
 
-type Tab = 'camera' | 'search' | 'manual' | 'quick';
+type Tab = 'camera' | 'search' | 'manual' | 'quick' | 'barcode';
 
 export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealModalProps) {
     const [activeTab, setActiveTab] = useState<Tab>('camera');
@@ -41,6 +41,12 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
     const [correctionInput, setCorrectionInput] = useState(''); // Current correction input
     const [showCorrectionInput, setShowCorrectionInput] = useState(false); // Show correction UI after analysis
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Barcode tab
+    const [barcodeInput, setBarcodeInput] = useState('');
+    const [barcodeLoading, setBarcodeLoading] = useState(false);
+    const [barcodeProduct, setBarcodeProduct] = useState<BarcodeProduct | null>(null);
+    const [barcodeQuantity, setBarcodeQuantity] = useState('1');
 
     // Manual tab
     const [manualForm, setManualForm] = useState({
@@ -169,6 +175,51 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         } finally {
             setAnalyzing(false);
         }
+    };
+
+    // Barcode lookup handler
+    const handleBarcodeLookup = async () => {
+        if (!barcodeInput.trim()) {
+            toast.error('Please enter a barcode');
+            return;
+        }
+
+        setBarcodeLoading(true);
+        setBarcodeProduct(null);
+
+        try {
+            const result = await lookupFoodByBarcode(barcodeInput.trim());
+            
+            if (result.found) {
+                setBarcodeProduct(result);
+                toast.success('Product found!');
+            } else {
+                toast.error('Product not found. Try manual entry.');
+            }
+        } catch (error) {
+            console.error('Barcode lookup error:', error);
+            toast.error('Failed to lookup barcode');
+        } finally {
+            setBarcodeLoading(false);
+        }
+    };
+
+    // Use barcode product - populate manual form
+    const handleUseBarcodeProduct = () => {
+        if (!barcodeProduct) return;
+        
+        const qty = parseFloat(barcodeQuantity) || 1;
+        setManualForm({
+            description: barcodeProduct.brand 
+                ? `${barcodeProduct.name} (${barcodeProduct.brand})`
+                : barcodeProduct.name,
+            calories: Math.round(barcodeProduct.calories * qty).toString(),
+            protein: Math.round(barcodeProduct.protein * qty).toString(),
+            carbs: Math.round(barcodeProduct.carbs * qty).toString(),
+            fat: Math.round(barcodeProduct.fat * qty).toString(),
+        });
+        setActiveTab('manual');
+        toast.success('Product added to form');
     };
 
     // Clear corrections when changing image
@@ -615,12 +666,13 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 )}
 
                 {/* Tabs */}
-                <div className="flex border-b border-neutral-200">
+                <div className="flex border-b border-neutral-200 overflow-x-auto">
                     {[
                         { key: 'camera' as const, label: 'Photo', icon: Camera },
+                        { key: 'barcode' as const, label: 'Barcode', icon: Barcode },
                         { key: 'search' as const, label: 'Search', icon: Search },
                         { key: 'manual' as const, label: 'Manual', icon: Upload },
-                        { key: 'quick' as const, label: 'Quick Add', icon: null },
+                        { key: 'quick' as const, label: 'Quick', icon: null },
                     ].map((tab) => (
                         <button
                             key={tab.key}
@@ -628,14 +680,14 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                 setActiveTab(tab.key);
                                 if (tab.key === 'quick') loadQuickItems();
                             }}
-                            className={`flex-1 py-3 px-4 font-medium transition-colors ${activeTab === tab.key
+                            className={`flex-1 py-3 px-2 sm:px-4 font-medium transition-colors whitespace-nowrap ${activeTab === tab.key
                                 ? 'text-primary-600 border-b-2 border-primary-600'
                                 : 'text-neutral-600 hover:text-neutral-900'
                                 }`}
                         >
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1 sm:gap-2">
                                 {tab.icon && <tab.icon className="w-4 h-4" />}
-                                <span>{tab.label}</span>
+                                <span className="text-sm">{tab.label}</span>
                             </div>
                         </button>
                     ))}
@@ -746,6 +798,129 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Barcode Tab */}
+                    {activeTab === 'barcode' && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="label">Enter Barcode Number</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        className="input flex-1 text-lg tracking-wider"
+                                        value={barcodeInput}
+                                        onChange={(e) => setBarcodeInput(e.target.value.replace(/\D/g, ''))}
+                                        placeholder="e.g., 5000112637922"
+                                        maxLength={14}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !barcodeLoading) {
+                                                handleBarcodeLookup();
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={handleBarcodeLookup}
+                                        disabled={barcodeLoading || !barcodeInput.trim()}
+                                        className="btn btn-primary px-4"
+                                    >
+                                        {barcodeLoading ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            'Lookup'
+                                        )}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-neutral-500 mt-1">
+                                    Enter the barcode from product packaging (uses Open Food Facts database)
+                                </p>
+                            </div>
+
+                            {/* Barcode Product Result */}
+                            {barcodeProduct && barcodeProduct.found && (
+                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-4 animate-fade-in">
+                                    <div className="flex items-start gap-3">
+                                        {barcodeProduct.imageUrl ? (
+                                            <img
+                                                src={barcodeProduct.imageUrl}
+                                                alt={barcodeProduct.name}
+                                                className="w-16 h-16 object-contain rounded-lg bg-white"
+                                            />
+                                        ) : (
+                                            <div className="w-16 h-16 bg-neutral-100 rounded-lg flex items-center justify-center">
+                                                <Barcode className="w-8 h-8 text-neutral-400" />
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-neutral-900 truncate">
+                                                {barcodeProduct.name}
+                                            </h3>
+                                            {barcodeProduct.brand && (
+                                                <p className="text-sm text-neutral-600">{barcodeProduct.brand}</p>
+                                            )}
+                                            <p className="text-xs text-neutral-500 mt-1">
+                                                Per {barcodeProduct.servingSize || '100g'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Nutrition per serving */}
+                                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-green-200">
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-neutral-900">{barcodeProduct.calories}</div>
+                                            <div className="text-xs text-neutral-500">kcal</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-accent-600">{barcodeProduct.protein}g</div>
+                                            <div className="text-xs text-neutral-500">protein</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-blue-600">{barcodeProduct.carbs}g</div>
+                                            <div className="text-xs text-neutral-500">carbs</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-purple-600">{barcodeProduct.fat}g</div>
+                                            <div className="text-xs text-neutral-500">fat</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Quantity selector */}
+                                    <div className="flex items-center gap-3">
+                                        <label className="text-sm font-medium text-neutral-700">Servings:</label>
+                                        <input
+                                            type="number"
+                                            min="0.25"
+                                            step="0.25"
+                                            value={barcodeQuantity}
+                                            onChange={(e) => setBarcodeQuantity(e.target.value)}
+                                            className="input w-24 text-center"
+                                        />
+                                        <span className="text-sm text-neutral-500">
+                                            = {Math.round(barcodeProduct.calories * (parseFloat(barcodeQuantity) || 1))} kcal
+                                        </span>
+                                    </div>
+
+                                    {/* Use Product Button */}
+                                    <button
+                                        onClick={handleUseBarcodeProduct}
+                                        className="w-full btn btn-primary py-3"
+                                    >
+                                        Use This Product
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Help text */}
+                            <div className="bg-neutral-50 rounded-lg p-4 text-sm text-neutral-600">
+                                <p className="font-medium mb-2">💡 Tips:</p>
+                                <ul className="list-disc list-inside space-y-1 text-xs">
+                                    <li>Barcode is usually found near the product's ingredients list</li>
+                                    <li>Values shown are per 100g unless stated otherwise</li>
+                                    <li>Adjust servings to match your actual portion</li>
+                                    <li>Not all products are in the database - use Search or Manual for unlisted items</li>
+                                </ul>
+                            </div>
                         </div>
                     )}
 
