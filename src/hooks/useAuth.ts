@@ -37,10 +37,15 @@ export function useAuth() {
         return data;
     };
 
-    const signUp = async (email: string, password: string) => {
+    // The access code is checked again by the server when the account is created
+    const signUp = async (email: string, password: string, accessCode: string) => {
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
+            options: {
+                data: { access_code: accessCode },
+                emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+            },
         });
 
         if (error) {
@@ -48,6 +53,24 @@ export function useAuth() {
         }
 
         return data;
+    };
+
+    const sendPasswordReset = async (email: string) => {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}${import.meta.env.BASE_URL}`,
+        });
+
+        if (error) {
+            throw error;
+        }
+    };
+
+    const updatePassword = async (password: string) => {
+        const { error } = await supabase.auth.updateUser({ password });
+
+        if (error) {
+            throw error;
+        }
     };
 
     const signOut = async () => {
@@ -62,6 +85,8 @@ export function useAuth() {
         loading,
         signIn,
         signUp,
+        sendPasswordReset,
+        updatePassword,
         signOut,
     };
 }

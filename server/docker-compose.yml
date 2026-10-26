@@ -40,11 +40,12 @@ services:
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
-      API_EXTERNAL_URL: https://${SITE_DOMAIN}/auth/v1
+      # Email links are API_EXTERNAL_URL + the URLPATHS below (same layout as Supabase's own compose)
+      API_EXTERNAL_URL: https://${SITE_DOMAIN}
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
       GOTRUE_SITE_URL: ${SITE_URL}
-      GOTRUE_URI_ALLOW_LIST: ${SITE_URL}/**
+      GOTRUE_URI_ALLOW_LIST: ${SITE_URL},${SITE_URL}/**,http://localhost:3000/**
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
@@ -52,9 +53,22 @@ services:
       GOTRUE_JWT_EXP: 3600
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      # No SMTP server here, so new sign-ups are confirmed immediately.
-      GOTRUE_MAILER_AUTOCONFIRM: "true"
       GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      # Email (sign-up confirmation, password reset). Until SMTP_* is set in .env, keep
+      # MAILER_AUTOCONFIRM=true so new sign-ups don't wait for an email that can't be sent.
+      GOTRUE_MAILER_AUTOCONFIRM: ${MAILER_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_SENDER_EMAIL:-}
+      GOTRUE_SMTP_SENDER_NAME: MealTracker
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: Confirm your MealTracker account
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: Reset your MealTracker password
     networks:
       default:
       empwr:
@@ -79,6 +93,21 @@ services:
       default:
       empwr:
         aliases: [mealtracker-rest]
+
+  # Holds the OpenAI key; the app calls /ai/v1/responses with the user's login token
+  ai:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python", "-u", "/app/ai_proxy.py"]
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET}
+      AI_DAILY_LIMIT: ${AI_DAILY_LIMIT:-200}
+    volumes:
+      - ./ai_proxy.py:/app/ai_proxy.py:ro
+    networks:
+      empwr:
+        aliases: [mealtracker-ai]
 
 networks:
   empwr:

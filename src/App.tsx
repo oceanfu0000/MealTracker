@@ -4,7 +4,9 @@ import { Home, User, Clock, MessageCircle, BarChart3 } from 'lucide-react';
 import { useAuth } from './hooks/useAuth';
 import { useStore } from './store';
 import { getProfile, getNutritionTargets, markDisclaimerSeen } from './lib/api';
+import { isPasswordRecoveryRedirect } from './lib/supabase';
 import AuthPage from './pages/AuthPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import HomePage from './pages/HomePage';
 import ProfilePage from './pages/ProfilePage';
 import HistoryPage from './pages/HistoryPage';
@@ -21,6 +23,7 @@ function App() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [showUserGuide, setShowUserGuide] = useState(false);
     const [showDisclaimer, setShowDisclaimer] = useState(false);
+    const [needsNewPassword, setNeedsNewPassword] = useState(isPasswordRecoveryRedirect);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -85,6 +88,11 @@ function App() {
     // Not authenticated
     if (!user) {
         return <AuthPage />;
+    }
+
+    // Arrived from a "reset password" email link
+    if (needsNewPassword) {
+        return <ResetPasswordPage onDone={() => setNeedsNewPassword(false)} />;
     }
 
     // Need profile setup

@@ -9,7 +9,7 @@
     ```bash
     cp .env.example .env
     ```
-    *(Required: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_OPENAI_API_KEY`)*
+    *(Required: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. The OpenAI key lives on the server, see [server/README.md](server/README.md).)*
 
 3.  **Run Development Server:**
     ```bash
@@ -37,14 +37,15 @@ A mobile-first meal tracking web application with AI-powered nutrition analysis,
 
 - 📈 **Personalized Targets**: Automatic nutrition goal calculation based on your profile
 - 🏃 **Manual Activity Tracking**: Optionally log steps, active calories, and workouts
-- 💾 **Real-time Sync**: All data stored securely in Supabase with RLS
+- 💾 **Real-time Sync**: All data stored securely in self-hosted Supabase with RLS
+- 🔑 **Account Recovery**: Email confirmation and "forgot password" reset links
 
 ## Tech Stack
 
 - **Frontend**: React 18 + TypeScript
 - **Styling**: Tailwind CSS with custom design system
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **AI**: OpenAI GPT-4 Vision API
+- **Backend**: Self-hosted Supabase (PostgreSQL + Auth + PostgREST) on an Ubuntu server, see [server/README.md](server/README.md)
+- **AI**: OpenAI Responses API (GPT-4.1), called through a server-side proxy
 - **State Management**: Zustand
 - **Routing**: React Router v6
 
@@ -53,8 +54,7 @@ A mobile-first meal tracking web application with AI-powered nutrition analysis,
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Supabase account ([create one free](https://supabase.com))
-- OpenAI API key ([get one here](https://platform.openai.com/api-keys))
+- The backend server running (see [server/README.md](server/README.md)), with an OpenAI API key ([get one here](https://platform.openai.com/api-keys)) in its `.env`
 
 
 ### Installation
@@ -71,14 +71,12 @@ cd MealTracker
 npm install
 ```
 
-3. **Set up Supabase**
+3. **Set up the backend**
 
-- Create a new project in [Supabase Dashboard](https://app.supabase.com)
-- Go to SQL Editor and run the migration script from `supabase_migration.sql`
-- **Configure Registration Code**:
-    - Open `access_codes_migration.sql`
-    - Change `'apple'` to your desired access code (e.g., `'secret123'`)
-    - Run this script in the Supabase SQL Editor too
+The database, auth and AI proxy run on your own server with Docker. Setup, restore from a
+Supabase backup, email and OpenAI configuration are in [server/README.md](server/README.md).
+For a brand-new database, run `supabase_migration.sql`, then `access_codes_migration.sql` (change
+`'apple'` to your own registration code first), then `server/migrations/*.sql`.
 
 
 4. **Configure environment variables**
@@ -92,9 +90,8 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_OPENAI_API_KEY=sk-your-openai-key
+VITE_SUPABASE_URL=https://129-221-137-70.sslip.io
+VITE_SUPABASE_ANON_KEY=your-anon-key   # ANON_KEY from the server's .env
 ```
 
 5. **Run the development server**
@@ -186,9 +183,11 @@ All tables have Row-Level Security (RLS) enabled for data privacy.
 
 ## API Integration
 
-### OpenAI GPT-4 Vision
+### OpenAI (via server proxy)
 
-The app uses GPT-4 Vision to analyze meal photos. Images are automatically compressed before sending to reduce token costs.
+Meal photo analysis, text analysis and the FAQ assistant use the OpenAI Responses API (`gpt-4.1` / `gpt-4.1-nano`).
+The app sends requests to `/ai/v1/responses` on the server with the user's login token; the server adds
+the OpenAI key, so it never ships in the browser bundle. Images are compressed before sending to reduce token costs.
 
 ### Nutrition Calculation
 
@@ -206,21 +205,10 @@ Daily targets are calculated using the Mifflin-St Jeor equation:
 npm run build
 ```
 
-### Deploy to Vercel
+### Deploy
 
-1. Push code to GitHub
-2. Import project in [Vercel Dashboard](https://vercel.com)
-3. Add environment variables
-4. Deploy!
-
-### Deploy to Netlify
-
-1. Push code to GitHub
-2. Import project in [Netlify Dashboard](https://netlify.com)
-3. Build command: `npm run build`
-4. Publish directory: `dist`
-5. Add environment variables
-6. Deploy!
+The frontend deploys to GitHub Pages on every push to `main`, see [DEPLOYMENT.md](DEPLOYMENT.md).
+The backend runs on the Ubuntu server, see [server/README.md](server/README.md).
 
 ## Customization
 
@@ -244,10 +232,14 @@ Modify the calculation logic in `src/lib/api.ts` → `calculateNutritionTargets(
 **"Missing Supabase environment variables"**
 - Ensure `.env` file exists and contains valid credentials
 
-**AI meal analysis not working**
-- Check OpenAI API key is valid
-- Ensure you have API credits available
+**AI meal analysis or FAQ not working**
+- "AI is not set up on the server yet": add `OPENAI_API_KEY` to the server's `.env` and run `sudo docker compose up -d`
+- "Daily AI limit reached": raise `AI_DAILY_LIMIT` in the server's `.env`
+- Check the OpenAI key is valid and has credits: `sudo docker compose logs ai`
 - Try with a smaller image
+
+**Password reset / confirmation emails not arriving**
+- Email needs `SMTP_*` settings in the server's `.env`, see [server/README.md](server/README.md)
 
 
 

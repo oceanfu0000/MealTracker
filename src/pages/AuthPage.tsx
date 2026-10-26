@@ -5,7 +5,7 @@ import { verifyAccessCode } from '../lib/api';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 
-type AuthMode = 'login' | 'register';
+type AuthMode = 'login' | 'register' | 'forgot';
 
 // Parse error from URL hash (Supabase redirects with hash fragments)
 function parseAuthError(): { error: string; errorCode: string; errorDescription: string } | null {
@@ -31,7 +31,7 @@ function parseAuthError(): { error: string; errorCode: string; errorDescription:
 function getErrorMessage(errorCode: string, errorDescription: string): string {
     switch (errorCode) {
         case 'otp_expired':
-            return 'Your email confirmation link has expired. Please request a new one below.';
+            return 'This email link has expired or was already used. For a password reset, use "Forgot password?" to get a new link. For account confirmation, request a new one below.';
         case 'access_denied':
             return errorDescription || 'Access was denied. Please try again.';
         default:
@@ -40,7 +40,7 @@ function getErrorMessage(errorCode: string, errorDescription: string): string {
 }
 
 export default function AuthPage() {
-    const { signIn, signUp } = useAuth();
+    const { signIn, signUp, sendPasswordReset } = useAuth();
     const [mode, setMode] = useState<AuthMode>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -52,6 +52,7 @@ export default function AuthPage() {
     const [resendEmail, setResendEmail] = useState('');
     const [resendLoading, setResendLoading] = useState(false);
     const [resendSuccess, setResendSuccess] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
 
     // Check for auth errors in URL on mount
     useEffect(() => {
@@ -105,7 +106,11 @@ export default function AuthPage() {
         setLoading(true);
 
         try {
-            if (mode === 'register') {
+            if (mode === 'forgot') {
+                await sendPasswordReset(email);
+                setResetSent(true);
+                toast.success('Password reset email sent! Please check your inbox.');
+            } else if (mode === 'register') {
                 if (password !== confirmPassword) {
                     setError('Passwords do not match');
                     setLoading(false);
@@ -126,9 +131,13 @@ export default function AuthPage() {
                     return;
                 }
 
-                // ... (inside component)
-                await signUp(email, password);
-                toast.success('Account created! Please check your email.');
+                // With email confirmation on, no session comes back until the link is clicked
+                const { session } = await signUp(email, password, accessCode);
+                if (session) {
+                    toast.success('Account created!');
+                } else {
+                    toast.success('Account created! Please check your email to confirm it.');
+                }
             } else {
                 await signIn(email, password);
             }
@@ -173,7 +182,7 @@ export default function AuthPage() {
                                 <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                                 <div className="flex-1">
                                     <h3 className="font-medium text-amber-800 mb-1">
-                                        Email Confirmation Issue
+                                        Email Link Issue
                                     </h3>
                                     <p className="text-sm text-amber-700 mb-3">
                                         {authError.message}
@@ -231,7 +240,15 @@ export default function AuthPage() {
                         </div>
                     )}
 
-                    {/* Tab Switcher */}
+                    {mode === 'forgot' ? (
+                        <div className="mb-6">
+                            <h2 className="text-xl font-semibold text-neutral-900">Reset your password</h2>
+                            <p className="text-sm text-neutral-600 mt-1">
+                                Enter your account email and we'll send you a link to set a new password.
+                            </p>
+                        </div>
+                    ) : (
+                    /* Tab Switcher */
                     <div className="flex gap-2 mb-6 p-1 bg-neutral-100 rounded-lg">
                         <button
                             onClick={() => setMode('login')}
@@ -252,7 +269,17 @@ export default function AuthPage() {
                             Register
                         </button>
                     </div>
+                    )}
 
+                    {mode === 'forgot' && resetSent ? (
+                        <div className="flex items-start gap-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg">
+                            <Mail className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>
+                                If an account exists for {email}, a reset link is on its way. Open it on this
+                                device to choose a new password.
+                            </span>
+                        </div>
+                    ) : (
                     <form onSubmit={handleSubmit} className="space-y-4">
                         {error && (
                             <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -273,19 +300,32 @@ export default function AuthPage() {
                             />
                         </div>
 
-                        <div>
-                            <label className="label">Password</label>
-                            <input
-                                type="password"
-                                className="input"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                placeholder="••••••••"
-                                minLength={6}
-                                disabled={loading}
-                            />
-                        </div>
+                        {mode !== 'forgot' && (
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <label className="label">Password</label>
+                                    {mode === 'login' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setMode('forgot'); setError(''); }}
+                                            className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                                        >
+                                            Forgot password?
+                                        </button>
+                                    )}
+                                </div>
+                                <input
+                                    type="password"
+                                    className="input"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                    placeholder="••••••••"
+                                    minLength={6}
+                                    disabled={loading}
+                                />
+                            </div>
+                        )}
 
                         {mode === 'register' && (
                             <div>
@@ -334,11 +374,18 @@ export default function AuthPage() {
                             {loading ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    <span>{mode === 'login' ? 'Signing in...' : 'Creating account...'}</span>
+                                    <span>
+                                        {mode === 'login' ? 'Signing in...' : mode === 'forgot' ? 'Sending...' : 'Creating account...'}
+                                    </span>
                                 </>
                             ) : (
                                 <>
-                                    {mode === 'login' ? (
+                                    {mode === 'forgot' ? (
+                                        <>
+                                            <Mail className="w-5 h-5" />
+                                            <span>Send Reset Link</span>
+                                        </>
+                                    ) : mode === 'login' ? (
                                         <>
                                             <LogIn className="w-5 h-5" />
                                             <span>Login</span>
@@ -353,8 +400,17 @@ export default function AuthPage() {
                             )}
                         </button>
                     </form>
+                    )}
 
                     <div className="mt-6 text-center text-sm text-neutral-500">
+                        {mode === 'forgot' ? (
+                            <button
+                                onClick={() => { setMode('login'); setResetSent(false); setError(''); }}
+                                className="text-primary-600 hover:text-primary-700 font-medium"
+                            >
+                                Back to Login
+                            </button>
+                        ) : (
                         <p>
                             {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
                             <button
@@ -364,6 +420,7 @@ export default function AuthPage() {
                                 {mode === 'login' ? 'Register' : 'Login'}
                             </button>
                         </p>
+                        )}
                     </div>
                 </div>
 

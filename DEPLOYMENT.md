@@ -1,103 +1,55 @@
-# GitHub Pages Deployment Guide
+# Deployment Guide
 
-## Setup Instructions
+MealTracker has two parts:
 
-### 1. Push Your Code to GitHub
+- **Frontend**: this repo, built by GitHub Actions and served on GitHub Pages at
+  `https://oceanfu0000.github.io/MealTracker/`
+- **Backend**: database, auth and the OpenAI proxy on the Ubuntu server at
+  `https://129-221-137-70.sslip.io`. Setup and maintenance are in [server/README.md](server/README.md).
 
-```bash
-# Initialize git if not already done
-git init
+## Frontend (GitHub Pages)
 
-# Add all files
-git add .
+### 1. GitHub Secrets
 
-# Commit
-git commit -m "Initial commit - Meal Tracker app"
+In the repository: **Settings → Secrets and variables → Actions**, set:
 
-# Create a new repository on GitHub, then:
-git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPO-NAME.git
-git branch -M main
-git push -u origin main
-```
+| Name | Value |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://129-221-137-70.sslip.io` |
+| `VITE_SUPABASE_ANON_KEY` | `ANON_KEY` from `~/mealtracker/.env` on the server |
 
-### 2. Configure GitHub Secrets
+The OpenAI key is **not** a GitHub secret any more. It lives in the server's `.env`, because
+anything passed to the build as `VITE_*` ends up readable in the public JavaScript.
 
-Go to your GitHub repository:
-1. Click **Settings** → **Secrets and variables** → **Actions**
-2. Click **New repository secret** and add these three secrets:
+### 2. Enable GitHub Pages
 
-   - Name: `VITE_SUPABASE_URL`
-     - Value: Your Supabase project URL
-   
-   - Name: `VITE_SUPABASE_ANON_KEY`
-     - Value: Your Supabase anon key
-   
-   - Name: `VITE_OPENAI_API_KEY`
-     - Value: Your OpenAI API key
+**Settings → Pages → Source: GitHub Actions**
 
-### 3. Enable GitHub Pages
+### 3. Deploy
 
-1. Go to **Settings** → **Pages**
-2. Under **Source**, select **GitHub Actions**
-3. Save the settings
+Every push to `main` builds and deploys automatically (see the **Actions** tab).
+After changing a secret, re-run the **Deploy to GitHub Pages** workflow; secrets only take effect on the next build.
 
-### 4. Deploy
+## Backend (Ubuntu server)
 
-The app will automatically deploy when you push to the `main` branch!
-
-Check the **Actions** tab to see the deployment progress.
-
-Your app will be available at:
-```
-https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/
-```
-
-## Manual Deployment (Alternative)
-
-If you prefer to deploy manually:
-
-```bash
-# Install dependencies
-npm install
-
-# Build and deploy
-npm run deploy
-```
-
-**Note**: For manual deployment, you need to set environment variables in your local `.env` file first.
-
-## Updating Your App
-
-Just push changes to the `main` branch:
-
-```bash
-git add .
-git commit -m "Update app"
-git push
-```
-
-The GitHub Action will automatically rebuild and redeploy!
+See [server/README.md](server/README.md) for the Docker stack, `.env` settings (OpenAI key, email),
+backups and common tasks.
 
 ## Important Notes
 
-⚠️ **Environment Variables**: Your Supabase anon key will be visible in the built JavaScript files. This is normal - the anon key is designed to be public. **Never** expose your Supabase service role key!
-
-⚠️ **First Load**: The first deployment might take 2-3 minutes. Check the Actions tab for progress.
+⚠️ **Anon key vs service role key**: the anon key is public by design; the data is protected by
+row-level security. **Never** put the `SERVICE_ROLE_KEY` in the app or in GitHub.
 
 ⚠️ **Client-Side Routing**: The included `404.html` ensures React Router works correctly on page refresh.
 
 ## Troubleshooting
 
-**404 Error on deployment:**
+**"Invalid supabaseUrl" in the browser console:**
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are probably swapped; the URL starts with `https://`
+
+**Blank page / 404 after deploy:**
 - Make sure GitHub Pages source is set to "GitHub Actions"
 - Check the Actions tab for build errors
 
-**Blank page:**
-- Check browser console for errors
-- Verify your Supabase URL in GitHub Secrets
-
-**Authentication not working:**
-- Add your GitHub Pages URL to Supabase **Authentication** → **URL Configuration** → **Redirect URLs**:
-  ```
-  https://YOUR-USERNAME.github.io/YOUR-REPO-NAME/
-  ```
+**Email links open the wrong page:**
+- `SITE_URL` in the server's `.env` must be `https://oceanfu0000.github.io/MealTracker`

@@ -1,4 +1,5 @@
-import { supabase } from './supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { supabase, supabaseUrl } from './supabase';
 import type {
     InsertMealLog,
     MealLog,
@@ -618,8 +619,26 @@ export async function upsertActivity(activity: InsertManualActivity & { user_id:
 }
 
 // ============================================
-// AI MEAL ANALYSIS (Placeholder for Edge Function)
+// AI MEAL ANALYSIS
 // ============================================
+
+// OpenAI is called through the server's /ai/v1 proxy, which holds the API key and only
+// accepts logged-in users, so the key never ships in the browser bundle.
+async function callOpenAI(body: unknown): Promise<Response> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        throw new Error('Your session has expired. Please log in again.');
+    }
+
+    return fetch(`${supabaseUrl}/ai/v1/responses`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(body),
+    });
+}
 
 export async function analyzeMealImage(
     imageBase64: string, 
@@ -627,12 +646,6 @@ export async function analyzeMealImage(
     exclusions?: string[]
 ): Promise<MealAnalysis | null> {
     try {
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        if (!openaiKey) {
-            console.error('OpenAI API key not configured');
-            return null;
-        }
-
         // Build the prompt with optional hint and exclusions
         let promptText = 'Analyze this meal and provide nutrition estimates.';
         
@@ -646,31 +659,24 @@ export async function analyzeMealImage(
         
         promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.';
 
-        const response = await fetch('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1',
-                max_output_tokens: 300,
-                input: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'input_text',
-                                text: promptText
-                            },
-                            {
-                                type: 'input_image',
-                                image_url: `data:image/jpeg;base64,${imageBase64}`,
-                            }
-                        ]
-                    }
-                ]
-            }),
+        const response = await callOpenAI({
+            model: 'gpt-4.1',
+            max_output_tokens: 300,
+            input: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'input_text',
+                            text: promptText
+                        },
+                        {
+                            type: 'input_image',
+                            image_url: `data:image/jpeg;base64,${imageBase64}`,
+                        }
+                    ]
+                }
+            ]
         });
 
         if (!response.ok) {
@@ -790,12 +796,6 @@ export async function reanalyzeMealImage(
     hint?: string
 ): Promise<MealAnalysis | null> {
     try {
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        if (!openaiKey) {
-            console.error('OpenAI API key not configured');
-            return null;
-        }
-
         // Build a more emphatic prompt for re-analysis
         let promptText = 'Analyze this meal and provide nutrition estimates.';
         
@@ -811,31 +811,24 @@ export async function reanalyzeMealImage(
         
         promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Asian/Malaysian foods, use typical serving sizes.';
 
-        const response = await fetch('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1',
-                max_output_tokens: 300,
-                input: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'input_text',
-                                text: promptText
-                            },
-                            {
-                                type: 'input_image',
-                                image_url: `data:image/jpeg;base64,${imageBase64}`,
-                            }
-                        ]
-                    }
-                ]
-            }),
+        const response = await callOpenAI({
+            model: 'gpt-4.1',
+            max_output_tokens: 300,
+            input: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'input_text',
+                            text: promptText
+                        },
+                        {
+                            type: 'input_image',
+                            image_url: `data:image/jpeg;base64,${imageBase64}`,
+                        }
+                    ]
+                }
+            ]
         });
 
         if (!response.ok) {
@@ -934,33 +927,20 @@ export async function reanalyzeMealImage(
 
 export async function analyzeMealByText(mealDescription: string): Promise<MealAnalysis | null> {
     try {
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        if (!openaiKey) {
-            console.error('OpenAI API key not configured');
-            return null;
-        }
-
-        const response = await fetch('https://api.openai.com/v1/responses', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1-nano',
-                max_output_tokens: 300,
-                input: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'input_text',
-                                text: `Analyze this meal/food item and provide nutrition estimates: "${mealDescription}". Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Malaysian/Asian foods, use typical serving sizes.`
-                            }
-                        ]
-                    }
-                ]
-            }),
+        const response = await callOpenAI({
+            model: 'gpt-4.1-nano',
+            max_output_tokens: 300,
+            input: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'input_text',
+                            text: `Analyze this meal/food item and provide nutrition estimates: "${mealDescription}". Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Malaysian/Asian foods, use typical serving sizes.`
+                        }
+                    ]
+                }
+            ]
         });
 
         if (!response.ok) {
@@ -1103,18 +1083,17 @@ export function compressImage(file: File, maxWidth: number = 800, quality: numbe
 // ACCESS CODES (SECURITY)
 // ============================================
 
+// The access_codes table isn't readable from the browser; this database function only
+// answers whether a code is valid.
 export async function verifyAccessCode(code: string): Promise<boolean> {
-    const { data, error } = await supabase
-        .from('access_codes')
-        .select('id')
-        .eq('code', code)
-        .single();
+    // The hand-written Database type has no Functions section, so call rpc on the untyped client
+    const { data, error } = await (supabase as unknown as SupabaseClient).rpc('check_access_code', { p_code: code });
 
-    if (error || !data) {
+    if (error) {
         return false;
     }
 
-    return true;
+    return data === true;
 }
 
 // ============================================
@@ -1237,11 +1216,6 @@ export async function askFAQQuestion(
     context: FAQContext
 ): Promise<string> {
     try {
-        const openaiKey = import.meta.env.VITE_OPENAI_API_KEY;
-        if (!openaiKey) {
-            throw new Error('OpenAI API key not configured');
-        }
-
         const remainingCalories = context.caloriesTarget - context.caloriesConsumed;
         const remainingProtein = context.proteinTarget - context.proteinConsumed;
         const remainingCarbs = context.carbsTarget - context.carbsConsumed;
@@ -1264,31 +1238,45 @@ When suggesting foods, consider the user's location for locally available option
 ${context.mealsLeft ? `Distribute the remaining calories and macros across ${context.mealsLeft} meal${context.mealsLeft > 1 ? 's' : ''}.` : ''}
 Format your response in a clear, readable way with bullet points where appropriate.`;
 
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${openaiKey}`,
-            },
-            body: JSON.stringify({
-                model: 'gpt-4.1-nano',
-                max_tokens: 700,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: question }
-                ],
-                temperature: 0.7,
-            }),
+        // Same Responses API as the meal photo analysis
+        const response = await callOpenAI({
+            model: 'gpt-4.1-nano',
+            max_output_tokens: 700,
+            temperature: 0.7,
+            instructions: systemPrompt,
+            input: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'input_text',
+                            text: question
+                        }
+                    ]
+                }
+            ]
         });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
             const errorMessage = errorData.error?.message || response.statusText;
-            throw new Error(`API error: ${errorMessage}`);
+            console.error('OpenAI API Error:', errorData);
+            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
         }
 
         const result = await response.json();
-        return result.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+
+        // The REST API has no output_text shortcut; collect the text parts of the message output
+        const answer = typeof result.output_text === 'string' && result.output_text
+            ? result.output_text
+            : (Array.isArray(result.output) ? result.output : [])
+                .filter((item: any) => item.type === 'message' && Array.isArray(item.content))
+                .flatMap((item: any) => item.content)
+                .filter((part: any) => part.type === 'output_text' && part.text)
+                .map((part: any) => part.text)
+                .join('\n');
+
+        return answer.trim() || 'Sorry, I could not generate a response.';
     } catch (error: any) {
         console.error('Error asking FAQ question:', error);
         throw new Error(error.message || 'Error getting AI response');
