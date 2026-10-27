@@ -928,8 +928,38 @@ export async function reanalyzeMealImage(
 export async function analyzeMealByText(mealDescription: string): Promise<MealAnalysis | null> {
     try {
         const response = await callOpenAI({
-            model: 'gpt-4.1-nano',
-            max_output_tokens: 300,
+            model: 'gpt-5-nano',
+            max_output_tokens: 500,
+            reasoning: {
+                effort: 'minimal',
+            },
+            text: {
+                format: {
+                    type: 'json_schema',
+                    name: 'meal_analysis',
+                    strict: true,
+                    schema: {
+                        type: 'object',
+                        properties: {
+                            description: { type: 'string' },
+                            calories: { type: 'number' },
+                            protein: { type: 'number' },
+                            carbs: { type: 'number' },
+                            fat: { type: 'number' },
+                            confidence: { type: 'number' },
+                        },
+                        required: [
+                            'description',
+                            'calories',
+                            'protein',
+                            'carbs',
+                            'fat',
+                            'confidence',
+                        ],
+                        additionalProperties: false,
+                    },
+                },
+            },
             input: [
                 {
                     role: 'user',
@@ -996,7 +1026,10 @@ export async function analyzeMealByText(mealDescription: string): Promise<MealAn
             }
         }
 
-
+        if (!content && result.status === 'incomplete') {
+            const reason = result.incomplete_details?.reason || 'unknown reason';
+            throw new Error(`OpenAI returned an incomplete response (${reason})`);
+        }
 
         let contentStr: string;
         if (typeof content === 'string') {
@@ -1240,7 +1273,7 @@ Format your response in a clear, readable way with bullet points where appropria
 
         // Same Responses API as the meal photo analysis
         const response = await callOpenAI({
-            model: 'gpt-4.1-nano',
+            model: 'gpt-5-nano',
             max_output_tokens: 700,
             temperature: 0.7,
             instructions: systemPrompt,
