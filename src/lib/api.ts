@@ -630,7 +630,7 @@ async function callOpenAI(body: unknown): Promise<Response> {
         throw new Error('Your session has expired. Please log in again.');
     }
 
-    return fetch(`${supabaseUrl}/ai/v1/responses`, {
+    const response = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/ai/v1/responses`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -638,6 +638,13 @@ async function callOpenAI(body: unknown): Promise<Response> {
         },
         body: JSON.stringify(body),
     });
+
+    // Anything other than JSON means the request never reached the proxy (wrong URL, server down)
+    if (!response.headers.get('Content-Type')?.includes('application/json')) {
+        throw new Error(`AI server returned an unexpected response (${response.status}). Please try again later.`);
+    }
+
+    return response;
 }
 
 export async function analyzeMealImage(
@@ -1271,11 +1278,15 @@ When suggesting foods, consider the user's location for locally available option
 ${context.mealsLeft ? `Distribute the remaining calories and macros across ${context.mealsLeft} meal${context.mealsLeft > 1 ? 's' : ''}.` : ''}
 Format your response in a clear, readable way with bullet points where appropriate.`;
 
-        // Same Responses API as the meal photo analysis
+        // Same Responses API as the meal photo analysis. gpt-5-nano is a reasoning model: it
+        // rejects temperature, and reasoning tokens count toward max_output_tokens, so keep
+        // reasoning minimal and leave headroom for the answer.
         const response = await callOpenAI({
             model: 'gpt-5-nano',
-            max_output_tokens: 700,
-            temperature: 0.7,
+            max_output_tokens: 2000,
+            reasoning: {
+                effort: 'minimal',
+            },
             instructions: systemPrompt,
             input: [
                 {
@@ -1299,7 +1310,12 @@ Format your response in a clear, readable way with bullet points where appropria
 
         const result = await response.json();
 
+        if (result.status === 'incomplete') {
+            console.warn('FAQ answer incomplete:', result.incomplete_details);
+        }
+
         // The REST API has no output_text shortcut; collect the text parts of the message output
+        // (gpt-5 models put a "reasoning" item before the message)
         const answer = typeof result.output_text === 'string' && result.output_text
             ? result.output_text
             : (Array.isArray(result.output) ? result.output : [])

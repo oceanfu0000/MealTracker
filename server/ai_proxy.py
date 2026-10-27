@@ -21,8 +21,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 JWT_SECRET = os.environ["JWT_SECRET"].encode()
 DAILY_LIMIT = int(os.environ.get("AI_DAILY_LIMIT", "200"))
-ALLOWED_MODELS = {"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano"}
-MAX_OUTPUT_TOKENS = 1000
+ALLOWED_MODELS = {"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-5-nano", "gpt-5-mini"}
+MAX_OUTPUT_TOKENS = 4000  # gpt-5 reasoning tokens count toward this
 MAX_BODY_BYTES = 20 * 1024 * 1024  # base64 meal photos
 
 _usage: dict[tuple[str, str], int] = {}
@@ -100,6 +100,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(400, "Model not allowed.")
         body["max_output_tokens"] = min(int(body.get("max_output_tokens") or MAX_OUTPUT_TOKENS), MAX_OUTPUT_TOKENS)
         body["stream"] = False
+        if body["model"].startswith("gpt-5"):
+            # Reasoning models reject sampling parameters
+            body.pop("temperature", None)
+            body.pop("top_p", None)
 
         if not take_quota(user_id):
             return self.send_json(429, f"Daily AI limit reached ({DAILY_LIMIT} requests). Try again tomorrow.")
