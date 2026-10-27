@@ -60,3 +60,24 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # The OpenAI key stays out of the website bundle: it is sent to the server's AI proxy instead.
+  # SERVER_AI_KEY_SSH is an SSH key that the server only allows to run set_openai_key.sh.
+  sync-openai-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send OpenAI key to the server
+        env:
+          OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+          SERVER_AI_KEY_SSH: ${{ secrets.SERVER_AI_KEY_SSH }}
+        run: |
+          if [ -z "$SERVER_AI_KEY_SSH" ] || [ -z "$OPENAI_API_KEY" ]; then
+            echo "::warning::SERVER_AI_KEY_SSH or VITE_OPENAI_API_KEY secret missing; OpenAI key not sent"
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "129.221.137.70 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBmJLLj56L/jnsqWm7xRhCPbn1Yf+iSioIZxFDd1hv5b" > ~/.ssh/known_hosts
+          install -m 600 /dev/null ~/.ssh/ai_key
+          printf '%s\n' "$SERVER_AI_KEY_SSH" > ~/.ssh/ai_key
+          printf '%s\n' "$OPENAI_API_KEY" | ssh -i ~/.ssh/ai_key -o BatchMode=yes ubuntu@129.221.137.70
+          rm -f ~/.ssh/ai_key
