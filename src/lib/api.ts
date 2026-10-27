@@ -89,7 +89,7 @@ export async function getNutritionTargets(userId: string): Promise<NutritionTarg
 
 export async function calculateNutritionTargets(
     request: NutritionCalculationRequest
-): Promise<{ calories: number; protein: number; carbs: number; fat: number }> {
+): Promise<{ calories: number; protein: number; carbs: number; fat: number; sugar: number }> {
     // Mifflin-St Jeor Equation for BMR
     // Men: BMR = 10 × weight(kg) + 6.25 × height(cm) - 5 × age(y) + 5
     // Women: BMR = 10 × weight(kg) + 6.25 × height(cm) - 5 × age(y) - 161
@@ -121,17 +121,25 @@ export async function calculateNutritionTargets(
     const carbCalories = calories - (protein * 4) - (fat * 9);
     const carbs = Math.round(carbCalories / 4); // 4 cal per gram of carbs
 
+    // Sugar: limit of 10% of calories (WHO guideline), 4 cal per gram
+    const sugar = sugarTargetForCalories(calories);
+
     return {
         calories: Math.round(calories),
         protein,
         carbs,
         fat,
+        sugar,
     };
+}
+
+export function sugarTargetForCalories(calories: number): number {
+    return Math.round((calories * 0.1) / 4);
 }
 
 export async function upsertNutritionTargets(
     userId: string,
-    targets: { calories: number; protein: number; carbs: number; fat: number }
+    targets: { calories: number; protein: number; carbs: number; fat: number; sugar: number }
 ): Promise<NutritionTargets | null> {
     const { data, error } = await supabase
         .from('nutrition_targets')
@@ -141,6 +149,7 @@ export async function upsertNutritionTargets(
             protein_target: targets.protein,
             carbs_target: targets.carbs,
             fat_target: targets.fat,
+            sugar_target: targets.sugar,
         } as any)
         .select()
         .single();
@@ -410,9 +419,10 @@ export function calculateDailyTotalsFromMeals(meals: MealLog[]): DailyTotals {
             protein: totals.protein + meal.protein,
             carbs: totals.carbs + meal.carbs,
             fat: totals.fat + meal.fat,
+            sugar: totals.sugar + (meal.sugar || 0),
             mealCount: totals.mealCount + 1,
         }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 }
+        { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, mealCount: 0 }
     );
 }
 
@@ -454,8 +464,9 @@ export function groupMealsForDisplay(meals: MealLog[]): GroupedMeal[] {
                 protein: acc.protein + meal.protein,
                 carbs: acc.carbs + meal.carbs,
                 fat: acc.fat + meal.fat,
+                sugar: acc.sugar + (meal.sugar || 0),
             }),
-            { calories: 0, protein: 0, carbs: 0, fat: 0 }
+            { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0 }
         );
 
         // Get the group name from any meal in the group (they should all have the same)
@@ -473,6 +484,7 @@ export function groupMealsForDisplay(meals: MealLog[]): GroupedMeal[] {
             totalProtein: totals.protein,
             totalCarbs: totals.carbs,
             totalFat: totals.fat,
+            totalSugar: totals.sugar,
             latestLoggedAt,
         });
     });
@@ -487,6 +499,7 @@ export function groupMealsForDisplay(meals: MealLog[]): GroupedMeal[] {
             totalProtein: meal.protein,
             totalCarbs: meal.carbs,
             totalFat: meal.fat,
+            totalSugar: meal.sugar || 0,
             latestLoggedAt: meal.logged_at,
         });
     });
@@ -647,149 +660,131 @@ async function callOpenAI(body: unknown): Promise<Response> {
     return response;
 }
 
+// Shared by photo and text analysis. Strict JSON schema, so the model can only answer with
+// these fields (no prose, no malformed JSON).
+const MEAL_ANALYSIS_FORMAT = {
+    type: 'json_schema',
+    name: 'meal_analysis',
+    strict: true,
+    schema: {
+        type: 'object',
+        properties: {
+            description: { type: 'string' },
+            calories: { type: 'number' },
+            protein: { type: 'number' },
+            carbs: { type: 'number' },
+            fat: { type: 'number' },
+            sugar: { type: 'number' },
+            confidence: { type: 'number' },
+        },
+        required: ['description', 'calories', 'protein', 'carbs', 'fat', 'sugar', 'confidence'],
+        additionalProperties: false,
+    },
+};
+
+const MEAL_ANALYSIS_INSTRUCTIONS = `You are a nutritionist estimating the nutrition of a single meal for a food diary app used mainly in Malaysia and Southeast Asia.
+- Identify the dish(es) and estimate the portion actually shown or described. In a photo, use the plate, bowl, cutlery or packaging for scale. If the portion is unclear, assume a typical local serving.
+- Include hidden calories: cooking oil, coconut milk, butter, sauces, gravy, sambal, and sugar in drinks, desserts and sauces.
+- protein, carbs, fat and sugar are grams for the whole portion. sugar is total sugars and is part of carbs, so sugar must not exceed carbs.
+- Keep the numbers consistent: calories should be close to 4 x protein + 4 x carbs + 9 x fat.
+- description: a short dish name with the portion, e.g. "Nasi lemak with fried chicken (1 plate)".
+- confidence: 0 to 1, how sure you are about both the dish and the portion size.`;
+
+function toMealAnalysis(raw: any, fallbackDescription: string): MealAnalysis {
+    const carbs = Math.max(0, Math.round(raw.carbs || 0));
+    return {
+        description: raw.description || fallbackDescription,
+        calories: Math.max(0, Math.round(raw.calories || 0)),
+        protein: Math.max(0, Math.round(raw.protein || 0)),
+        carbs,
+        fat: Math.max(0, Math.round(raw.fat || 0)),
+        sugar: Math.min(carbs, Math.max(0, Math.round(raw.sugar || 0))),
+        confidence: raw.confidence || 0.5,
+    };
+}
+
+async function requestMealAnalysis(
+    model: 'gpt-4.1' | 'gpt-5-nano',
+    content: unknown[],
+    fallbackDescription: string,
+): Promise<MealAnalysis> {
+    const response = await callOpenAI({
+        model,
+        // gpt-5-nano is a reasoning model; its reasoning tokens count toward max_output_tokens
+        ...(model === 'gpt-5-nano'
+            ? { max_output_tokens: 800, reasoning: { effort: 'minimal' } }
+            : { max_output_tokens: 400, temperature: 0.2 }),
+        instructions: MEAL_ANALYSIS_INSTRUCTIONS,
+        text: { format: MEAL_ANALYSIS_FORMAT },
+        input: [{ role: 'user', content }],
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
+        const errorMessage = errorData.error?.message || response.statusText;
+        console.error('OpenAI API Error:', errorData);
+        throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+    }
+
+    const result = await response.json();
+
+    // gpt-5 models put a "reasoning" item before the message, so look through all output items
+    const parts = (Array.isArray(result.output) ? result.output : [])
+        .filter((item: any) => item.type === 'message' && Array.isArray(item.content))
+        .flatMap((item: any) => item.content);
+
+    const refusal = parts.find((part: any) => part.type === 'refusal');
+    if (refusal) {
+        throw new Error(`The AI couldn't analyze this meal: ${refusal.refusal}`);
+    }
+
+    const text = (typeof result.output_text === 'string' && result.output_text) || parts
+        .filter((part: any) => part.type === 'output_text' && part.text)
+        .map((part: any) => part.text)
+        .join('');
+
+    if (!text) {
+        if (result.status === 'incomplete') {
+            const reason = result.incomplete_details?.reason || 'unknown reason';
+            throw new Error(`OpenAI returned an incomplete response (${reason})`);
+        }
+        console.warn('OpenAI returned empty output. Full response:', result);
+        throw new Error('No valid response from OpenAI');
+    }
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        console.warn('Could not find JSON in model output:', text);
+        throw new Error('OpenAI returned invalid JSON');
+    }
+
+    return toMealAnalysis(JSON.parse(jsonMatch[0]), fallbackDescription);
+}
+
+function mealImageInput(imageBase64: string, promptText: string): unknown[] {
+    return [
+        { type: 'input_text', text: promptText },
+        { type: 'input_image', image_url: `data:image/jpeg;base64,${imageBase64}` },
+    ];
+}
+
 export async function analyzeMealImage(
-    imageBase64: string, 
-    hint?: string, 
+    imageBase64: string,
+    hint?: string,
     exclusions?: string[]
 ): Promise<MealAnalysis | null> {
     try {
-        // Build the prompt with optional hint and exclusions
-        let promptText = 'Analyze this meal and provide nutrition estimates.';
-        
+        let promptText = 'Estimate the nutrition of the meal in this photo.';
+
         if (hint) {
-            promptText += ` Hint from user: "${hint}".`;
+            promptText += ` The user says: "${hint}". Trust this for what the food is and how much was eaten.`;
         }
-        
+
         if (exclusions && exclusions.length > 0) {
-            promptText += ` IMPORTANT: This meal is definitely NOT any of the following: ${exclusions.join(', ')}. Please identify something else.`;
-        }
-        
-        promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams.';
-
-        const response = await callOpenAI({
-            model: 'gpt-4.1',
-            max_output_tokens: 300,
-            input: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: promptText
-                        },
-                        {
-                            type: 'input_image',
-                            image_url: `data:image/jpeg;base64,${imageBase64}`,
-                        }
-                    ]
-                }
-            ]
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
-            const errorMessage = errorData.error?.message || response.statusText;
-            console.error('OpenAI API Error:', errorData);
-            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+            promptText += ` This meal is definitely NOT any of the following: ${exclusions.join(', ')}. Identify something else.`;
         }
 
-        const result = await response.json();
-
-
-
-        // Try multiple ways to extract content from the response
-        let content = '';
-
-        // Try result.output_text first
-        if (result.output_text) {
-            content = result.output_text.trim();
-        }
-
-        // Try result.output array
-        if (!content && Array.isArray(result.output) && result.output.length > 0) {
-            // Check first item in output array
-            const firstOutput = result.output[0];
-
-
-            // Try different possible structures
-            if (firstOutput.text) {
-                content = firstOutput.text;
-            } else if (firstOutput.content) {
-                // Check if content is an array (new API structure)
-                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
-                    const firstContent = firstOutput.content[0];
-                    if (firstContent.text) {
-                        content = firstContent.text;
-                    } else if (typeof firstContent === 'string') {
-                        content = firstContent;
-                    }
-                } else if (typeof firstOutput.content === 'string') {
-                    content = firstOutput.content;
-                }
-            } else if (firstOutput.type === 'output_text' && firstOutput.text) {
-                content = firstOutput.text;
-            }
-
-            // If still no content, try concatenating all output items
-            if (!content) {
-                content = result.output
-                    .map((item: any) => {
-                        if (typeof item === 'string') return item;
-                        if (item.text) return item.text;
-                        // Handle nested content array
-                        if (Array.isArray(item.content)) {
-                            return item.content
-                                .map((c: any) => c.text || c)
-                                .join('\n');
-                        }
-                        if (item.content) return item.content;
-                        return '';
-                    })
-                    .join('\n')
-                    .trim();
-            }
-        }
-
-
-
-        // Ensure content is a string before using .match()
-        // If content is an object, it might already be the parsed JSON we need
-        let contentStr: string;
-        if (typeof content === 'string') {
-            contentStr = content;
-        } else if (typeof content === 'object' && content !== null) {
-            // If it's already an object, try to use it directly
-            const analysis = content as any;
-            return {
-                description: analysis.description || 'Unknown meal',
-                calories: Math.round(analysis.calories || 0),
-                protein: Math.round(analysis.protein || 0),
-                carbs: Math.round(analysis.carbs || 0),
-                fat: Math.round(analysis.fat || 0),
-                confidence: analysis.confidence || 0.5,
-            };
-        } else {
-            console.warn('OpenAI returned empty or invalid output. Full response:', result);
-            throw new Error('No valid response from OpenAI');
-        }
-
-        // Extract JSON safely (remove extra text if needed)
-        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            console.warn('Could not find JSON in model output:', content);
-            throw new Error('OpenAI returned invalid JSON');
-        }
-
-        const analysis = JSON.parse(jsonMatch[0]);
-
-        return {
-            description: analysis.description || 'Unknown meal',
-            calories: Math.round(analysis.calories || 0),
-            protein: Math.round(analysis.protein || 0),
-            carbs: Math.round(analysis.carbs || 0),
-            fat: Math.round(analysis.fat || 0),
-            confidence: analysis.confidence || 0.5,
-        };
+        return await requestMealAnalysis('gpt-4.1', mealImageInput(imageBase64, promptText), 'Unknown meal');
     } catch (error: any) {
         console.error('Error analyzing meal:', error);
         throw new Error(error.message || 'Error analyzing meal');
@@ -803,129 +798,19 @@ export async function reanalyzeMealImage(
     hint?: string
 ): Promise<MealAnalysis | null> {
     try {
-        // Build a more emphatic prompt for re-analysis
-        let promptText = 'Analyze this meal and provide nutrition estimates.';
-        
+        let promptText = 'Estimate the nutrition of the meal in this photo.';
+
         if (hint) {
-            promptText += ` User hint: "${hint}".`;
+            promptText += ` The user says: "${hint}". Trust this for what the food is and how much was eaten.`;
         }
-        
+
         // Emphasize the exclusions strongly
         if (exclusions.length > 0) {
             const exclusionList = exclusions.map(e => `"${e}"`).join(', ');
-            promptText += ` CRITICAL: The user has confirmed this meal is DEFINITELY NOT: ${exclusionList}. You MUST identify a DIFFERENT dish. Think of other similar-looking dishes that are NOT in this exclusion list.`;
-        }
-        
-        promptText += ' Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Asian/Malaysian foods, use typical serving sizes.';
-
-        const response = await callOpenAI({
-            model: 'gpt-4.1',
-            max_output_tokens: 300,
-            input: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: promptText
-                        },
-                        {
-                            type: 'input_image',
-                            image_url: `data:image/jpeg;base64,${imageBase64}`,
-                        }
-                    ]
-                }
-            ]
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
-            const errorMessage = errorData.error?.message || response.statusText;
-            console.error('OpenAI API Error:', errorData);
-            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
+            promptText += ` CRITICAL: The user has confirmed this meal is DEFINITELY NOT: ${exclusionList}. You MUST identify a DIFFERENT dish. Consider other similar-looking dishes that are NOT in this list, then estimate its nutrition.`;
         }
 
-        const result = await response.json();
-
-        // Extract content (same logic as analyzeMealImage)
-        let content = '';
-
-        if (result.output_text) {
-            content = result.output_text.trim();
-        }
-
-        if (!content && Array.isArray(result.output) && result.output.length > 0) {
-            const firstOutput = result.output[0];
-
-            if (firstOutput.text) {
-                content = firstOutput.text;
-            } else if (firstOutput.content) {
-                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
-                    const firstContent = firstOutput.content[0];
-                    if (firstContent.text) {
-                        content = firstContent.text;
-                    } else if (typeof firstContent === 'string') {
-                        content = firstContent;
-                    }
-                } else if (typeof firstOutput.content === 'string') {
-                    content = firstOutput.content;
-                }
-            } else if (firstOutput.type === 'output_text' && firstOutput.text) {
-                content = firstOutput.text;
-            }
-
-            if (!content) {
-                content = result.output
-                    .map((item: any) => {
-                        if (typeof item === 'string') return item;
-                        if (item.text) return item.text;
-                        if (Array.isArray(item.content)) {
-                            return item.content
-                                .map((c: any) => c.text || c)
-                                .join('\n');
-                        }
-                        if (item.content) return item.content;
-                        return '';
-                    })
-                    .join('\n')
-                    .trim();
-            }
-        }
-
-        let contentStr: string;
-        if (typeof content === 'string') {
-            contentStr = content;
-        } else if (typeof content === 'object' && content !== null) {
-            const analysis = content as any;
-            return {
-                description: analysis.description || 'Unknown meal',
-                calories: Math.round(analysis.calories || 0),
-                protein: Math.round(analysis.protein || 0),
-                carbs: Math.round(analysis.carbs || 0),
-                fat: Math.round(analysis.fat || 0),
-                confidence: analysis.confidence || 0.5,
-            };
-        } else {
-            console.warn('OpenAI returned empty or invalid output. Full response:', result);
-            throw new Error('No valid response from OpenAI');
-        }
-
-        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            console.warn('Could not find JSON in model output:', content);
-            throw new Error('OpenAI returned invalid JSON');
-        }
-
-        const analysis = JSON.parse(jsonMatch[0]);
-
-        return {
-            description: analysis.description || 'Unknown meal',
-            calories: Math.round(analysis.calories || 0),
-            protein: Math.round(analysis.protein || 0),
-            carbs: Math.round(analysis.carbs || 0),
-            fat: Math.round(analysis.fat || 0),
-            confidence: analysis.confidence || 0.5,
-        };
+        return await requestMealAnalysis('gpt-4.1', mealImageInput(imageBase64, promptText), 'Unknown meal');
     } catch (error: any) {
         console.error('Error re-analyzing meal:', error);
         throw new Error(error.message || 'Error re-analyzing meal');
@@ -934,144 +819,11 @@ export async function reanalyzeMealImage(
 
 export async function analyzeMealByText(mealDescription: string): Promise<MealAnalysis | null> {
     try {
-        const response = await callOpenAI({
-            model: 'gpt-5-nano',
-            max_output_tokens: 500,
-            reasoning: {
-                effort: 'minimal',
-            },
-            text: {
-                format: {
-                    type: 'json_schema',
-                    name: 'meal_analysis',
-                    strict: true,
-                    schema: {
-                        type: 'object',
-                        properties: {
-                            description: { type: 'string' },
-                            calories: { type: 'number' },
-                            protein: { type: 'number' },
-                            carbs: { type: 'number' },
-                            fat: { type: 'number' },
-                            confidence: { type: 'number' },
-                        },
-                        required: [
-                            'description',
-                            'calories',
-                            'protein',
-                            'carbs',
-                            'fat',
-                            'confidence',
-                        ],
-                        additionalProperties: false,
-                    },
-                },
-            },
-            input: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'input_text',
-                            text: `Analyze this meal/food item and provide nutrition estimates: "${mealDescription}". Return ONLY a JSON object with this exact format: {"description": "meal description", "calories": number, "protein": number, "carbs": number, "fat": number, "confidence": number}. All macro values should be in grams. For Malaysian/Asian foods, use typical serving sizes.`
-                        }
-                    ]
-                }
-            ]
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: { message: response.statusText } }));
-            const errorMessage = errorData.error?.message || response.statusText;
-            console.error('OpenAI API Error:', errorData);
-            throw new Error(`OpenAI API error (${response.status}): ${errorMessage}`);
-        }
-
-        const result = await response.json();
-
-
-        // Extract content using the same logic as analyzeMealImage
-        let content = '';
-
-        if (result.output_text) {
-            content = result.output_text.trim();
-        }
-
-        if (!content && Array.isArray(result.output) && result.output.length > 0) {
-            const firstOutput = result.output[0];
-
-            if (firstOutput.text) {
-                content = firstOutput.text;
-            } else if (firstOutput.content) {
-                if (Array.isArray(firstOutput.content) && firstOutput.content.length > 0) {
-                    const firstContent = firstOutput.content[0];
-                    if (firstContent.text) {
-                        content = firstContent.text;
-                    } else if (typeof firstContent === 'string') {
-                        content = firstContent;
-                    }
-                } else if (typeof firstOutput.content === 'string') {
-                    content = firstOutput.content;
-                }
-            }
-
-            if (!content) {
-                content = result.output
-                    .map((item: any) => {
-                        if (typeof item === 'string') return item;
-                        if (item.text) return item.text;
-                        if (Array.isArray(item.content)) {
-                            return item.content
-                                .map((c: any) => c.text || c)
-                                .join('\n');
-                        }
-                        if (item.content) return item.content;
-                        return '';
-                    })
-                    .join('\n')
-                    .trim();
-            }
-        }
-
-        if (!content && result.status === 'incomplete') {
-            const reason = result.incomplete_details?.reason || 'unknown reason';
-            throw new Error(`OpenAI returned an incomplete response (${reason})`);
-        }
-
-        let contentStr: string;
-        if (typeof content === 'string') {
-            contentStr = content;
-        } else if (typeof content === 'object' && content !== null) {
-            const analysis = content as any;
-            return {
-                description: analysis.description || mealDescription,
-                calories: Math.round(analysis.calories || 0),
-                protein: Math.round(analysis.protein || 0),
-                carbs: Math.round(analysis.carbs || 0),
-                fat: Math.round(analysis.fat || 0),
-                confidence: analysis.confidence || 0.5,
-            };
-        } else {
-            console.warn('OpenAI returned empty or invalid output. Full response:', result);
-            throw new Error('No valid response from OpenAI');
-        }
-
-        const jsonMatch = contentStr.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            console.warn('Could not find JSON in model output:', content);
-            throw new Error('OpenAI returned invalid JSON');
-        }
-
-        const analysis = JSON.parse(jsonMatch[0]);
-
-        return {
-            description: analysis.description || mealDescription,
-            calories: Math.round(analysis.calories || 0),
-            protein: Math.round(analysis.protein || 0),
-            carbs: Math.round(analysis.carbs || 0),
-            fat: Math.round(analysis.fat || 0),
-            confidence: analysis.confidence || 0.5,
-        };
+        return await requestMealAnalysis(
+            'gpt-5-nano',
+            [{ type: 'input_text', text: `Estimate the nutrition of this meal: "${mealDescription}"` }],
+            mealDescription,
+        );
     } catch (error: any) {
         console.error('Error analyzing meal by text:', error);
         throw new Error(error.message || 'Error analyzing meal');
@@ -1146,6 +898,7 @@ export interface DailySummary {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     mealCount: number;
 }
 
@@ -1178,10 +931,10 @@ export async function fetchDailyHistoryByRange(
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    // Fetch only aggregated data we need (calories, protein, carbs, fat)
+    // Fetch only aggregated data we need (calories, protein, carbs, fat, sugar)
     const { data, error } = await supabase
         .from('meal_logs')
-        .select('logged_at, calories, protein, carbs, fat')
+        .select('logged_at, calories, protein, carbs, fat, sugar')
         .eq('user_id', userId)
         .gte('logged_at', start.toISOString())
         .lte('logged_at', end.toISOString())
@@ -1192,7 +945,7 @@ export async function fetchDailyHistoryByRange(
         return [];
     }
 
-    const meals = data as Pick<MealLog, 'logged_at' | 'calories' | 'protein' | 'carbs' | 'fat'>[];
+    const meals = data as Pick<MealLog, 'logged_at' | 'calories' | 'protein' | 'carbs' | 'fat' | 'sugar'>[];
 
     // Calculate number of days in range (add 1 to include both start and end dates)
     const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -1211,6 +964,7 @@ export async function fetchDailyHistoryByRange(
             protein: 0,
             carbs: 0,
             fat: 0,
+            sugar: 0,
             mealCount: 0
         });
     }
@@ -1225,6 +979,7 @@ export async function fetchDailyHistoryByRange(
             daySummary.protein += meal.protein;
             daySummary.carbs += meal.carbs;
             daySummary.fat += meal.fat;
+            daySummary.sugar += meal.sugar || 0;
             daySummary.mealCount += 1;
         }
     });
@@ -1246,6 +1001,8 @@ export interface FAQContext {
     carbsConsumed: number;
     fatTarget: number;
     fatConsumed: number;
+    sugarTarget: number;
+    sugarConsumed: number;
     location?: string;
     goal?: string;
     mealsLeft?: number;
@@ -1260,23 +1017,28 @@ export async function askFAQQuestion(
         const remainingProtein = context.proteinTarget - context.proteinConsumed;
         const remainingCarbs = context.carbsTarget - context.carbsConsumed;
         const remainingFat = context.fatTarget - context.fatConsumed;
+        const remainingSugar = context.sugarTarget - context.sugarConsumed;
+        const round = (n: number) => Math.round(n);
 
-        const systemPrompt = `You are a helpful nutrition assistant for a meal tracking app. 
-The user has the following nutrition data for today:
-- Daily calorie target: ${context.caloriesTarget} kcal
-- Calories consumed so far: ${context.caloriesConsumed} kcal
-- Remaining calories: ${remainingCalories} kcal
-- Protein target: ${context.proteinTarget}g, consumed: ${context.proteinConsumed}g, remaining: ${remainingProtein}g
-- Carbs target: ${context.carbsTarget}g, consumed: ${context.carbsConsumed}g, remaining: ${remainingCarbs}g
-- Fat target: ${context.fatTarget}g, consumed: ${context.fatConsumed}g, remaining: ${remainingFat}g
-${context.location ? `- User's location: ${context.location}` : ''}
-${context.goal ? `- User's goal: ${context.goal}` : ''}
+        const systemPrompt = `You are a practical nutrition coach inside a meal tracking app.
+
+Today's numbers for the user (negative "remaining" means they are already over):
+- Calories: target ${round(context.caloriesTarget)} kcal, eaten ${round(context.caloriesConsumed)} kcal, remaining ${round(remainingCalories)} kcal
+- Protein: target ${round(context.proteinTarget)}g, eaten ${round(context.proteinConsumed)}g, remaining ${round(remainingProtein)}g
+- Carbs: target ${round(context.carbsTarget)}g, eaten ${round(context.carbsConsumed)}g, remaining ${round(remainingCarbs)}g
+- Fat: target ${round(context.fatTarget)}g, eaten ${round(context.fatConsumed)}g, remaining ${round(remainingFat)}g
+- Sugar: limit ${round(context.sugarTarget)}g, eaten ${round(context.sugarConsumed)}g, remaining ${round(remainingSugar)}g
+${context.location ? `- Location: ${context.location}` : ''}
+${context.goal ? `- Goal: ${context.goal}` : ''}
 ${context.mealsLeft ? `- Meals left today: ${context.mealsLeft}` : ''}
 
-Provide helpful, practical advice based on this data. Be concise but informative. 
-When suggesting foods, consider the user's location for locally available options.
-${context.mealsLeft ? `Distribute the remaining calories and macros across ${context.mealsLeft} meal${context.mealsLeft > 1 ? 's' : ''}.` : ''}
-Format your response in a clear, readable way with bullet points where appropriate.`;
+How to answer:
+- Answer the user's question directly first, then give the reasoning briefly.
+- Protein is the priority to reach; calories and fat are budgets; sugar is a limit to stay under, not a goal to hit.
+- Suggest specific dishes or foods that are easy to get${context.location ? ` in ${context.location}` : ''}, each with approximate calories, protein, carbs, fat and sugar.
+${context.mealsLeft ? `- Split the remaining budget across ${context.mealsLeft} meal${context.mealsLeft > 1 ? 's' : ''} and give per-meal numbers.` : ''}
+- If the user is already over a budget, say so plainly and suggest lighter options, without lecturing.
+- Keep it short: plain text with simple "-" bullet points, no tables, no markdown headings, under 200 words.`;
 
         // Same Responses API as the meal photo analysis. gpt-5-nano is a reasoning model: it
         // rejects temperature, and reasoning tokens count toward max_output_tokens, so keep
@@ -1344,6 +1106,7 @@ export interface BarcodeProduct {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     servingSize?: string;
     imageUrl?: string;
     found: boolean;
@@ -1366,6 +1129,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
                 protein: 0,
                 carbs: 0,
                 fat: 0,
+                sugar: 0,
                 found: false,
             };
         }
@@ -1381,6 +1145,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
                 protein: 0,
                 carbs: 0,
                 fat: 0,
+                sugar: 0,
                 found: false,
             };
         }
@@ -1393,6 +1158,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
         const protein = Math.round(nutriments.proteins_100g || nutriments.proteins || 0);
         const carbs = Math.round(nutriments.carbohydrates_100g || nutriments.carbohydrates || 0);
         const fat = Math.round(nutriments.fat_100g || nutriments.fat || 0);
+        const sugar = Math.round(nutriments.sugars_100g || nutriments.sugars || 0);
 
         return {
             barcode,
@@ -1402,6 +1168,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
             protein,
             carbs,
             fat,
+            sugar,
             servingSize: product.serving_size || '100g',
             imageUrl: product.image_front_small_url || product.image_url || undefined,
             found: true,
@@ -1415,6 +1182,7 @@ export async function lookupFoodByBarcode(barcode: string): Promise<BarcodeProdu
             protein: 0,
             carbs: 0,
             fat: 0,
+            sugar: 0,
             found: false,
         };
     }
@@ -1429,6 +1197,7 @@ export interface NutritionAverages {
     avgProtein: number;
     avgCarbs: number;
     avgFat: number;
+    avgSugar: number;
     totalDays: number;
     daysWithMeals: number;
     totalMeals: number;
@@ -1458,6 +1227,7 @@ export async function getWeeklyAverages(userId: string, date: Date): Promise<Nut
             avgProtein: 0,
             avgCarbs: 0,
             avgFat: 0,
+            avgSugar: 0,
             totalDays: 7,
             daysWithMeals: 0,
             totalMeals: 0,
@@ -1470,8 +1240,9 @@ export async function getWeeklyAverages(userId: string, date: Date): Promise<Nut
             protein: acc.protein + day.protein,
             carbs: acc.carbs + day.carbs,
             fat: acc.fat + day.fat,
+            sugar: acc.sugar + day.sugar,
         }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0 }
     );
 
     return {
@@ -1479,6 +1250,7 @@ export async function getWeeklyAverages(userId: string, date: Date): Promise<Nut
         avgProtein: Math.round(totals.protein / daysWithMeals.length),
         avgCarbs: Math.round(totals.carbs / daysWithMeals.length),
         avgFat: Math.round(totals.fat / daysWithMeals.length),
+        avgSugar: Math.round(totals.sugar / daysWithMeals.length),
         totalDays: 7,
         daysWithMeals: daysWithMeals.length,
         totalMeals,
@@ -1507,6 +1279,7 @@ export async function getMonthlyAverages(userId: string, month: number, year: nu
             avgProtein: 0,
             avgCarbs: 0,
             avgFat: 0,
+            avgSugar: 0,
             totalDays: totalDaysInMonth,
             daysWithMeals: 0,
             totalMeals: 0,
@@ -1519,8 +1292,9 @@ export async function getMonthlyAverages(userId: string, month: number, year: nu
             protein: acc.protein + day.protein,
             carbs: acc.carbs + day.carbs,
             fat: acc.fat + day.fat,
+            sugar: acc.sugar + day.sugar,
         }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0 }
     );
 
     return {
@@ -1528,6 +1302,7 @@ export async function getMonthlyAverages(userId: string, month: number, year: nu
         avgProtein: Math.round(totals.protein / daysWithMeals.length),
         avgCarbs: Math.round(totals.carbs / daysWithMeals.length),
         avgFat: Math.round(totals.fat / daysWithMeals.length),
+        avgSugar: Math.round(totals.sugar / daysWithMeals.length),
         totalDays: totalDaysInMonth,
         daysWithMeals: daysWithMeals.length,
         totalMeals,

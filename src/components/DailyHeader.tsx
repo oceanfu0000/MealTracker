@@ -4,7 +4,7 @@ interface MacroProgressProps {
     label: string;
     current: number;
     target: number;
-    color: 'primary' | 'accent' | 'blue' | 'purple';
+    color: 'primary' | 'accent' | 'blue' | 'purple' | 'pink';
     unit?: string;
 }
 
@@ -18,6 +18,7 @@ function MacroProgress({ label, current, target, color, unit = 'g' }: MacroProgr
         accent: 'bg-accent-600',
         blue: 'bg-blue-600',
         purple: 'bg-purple-600',
+        pink: 'bg-pink-500',
     };
 
     return (
@@ -79,12 +80,6 @@ export default function DailyHeader() {
                         unit=""
                     />
                     <MacroProgress
-                        label="Protein"
-                        current={dailyTotals.protein}
-                        target={nutritionTargets.protein_target}
-                        color="accent"
-                    />
-                    <MacroProgress
                         label="Carbs"
                         current={dailyTotals.carbs}
                         target={nutritionTargets.carbs_target}
@@ -96,6 +91,21 @@ export default function DailyHeader() {
                         target={nutritionTargets.fat_target}
                         color="purple"
                     />
+                    <MacroProgress
+                        label="Sugar"
+                        current={dailyTotals.sugar}
+                        target={nutritionTargets.sugar_target}
+                        color="pink"
+                    />
+                    {/* Protein spans the full width so it's the longest bar */}
+                    <div className="col-span-2 md:col-span-4">
+                        <MacroProgress
+                            label="Protein"
+                            current={dailyTotals.protein}
+                            target={nutritionTargets.protein_target}
+                            color="accent"
+                        />
+                    </div>
                 </div>
             </div>
         </div>

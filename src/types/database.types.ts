@@ -25,6 +25,7 @@ export interface NutritionTargets {
     protein_target: number;
     carbs_target: number;
     fat_target: number;
+    sugar_target: number;
     created_at: string;
     updated_at: string;
 }
@@ -41,6 +42,7 @@ export interface MealLog {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     meal_group_id: string | null;
     meal_group_name: string | null;
     logged_at: string;
@@ -60,6 +62,7 @@ export interface QuickItem {
     protein_per_unit: number;
     carbs_per_unit: number;
     fat_per_unit: number;
+    sugar_per_unit: number;
     created_at: string;
     updated_at: string;
 }

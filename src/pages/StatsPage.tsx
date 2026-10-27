@@ -263,7 +263,7 @@ export default function StatsPage({ userId }: StatsPageProps) {
                                     </div>
 
                                     {/* Macros Grid */}
-                                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-neutral-100">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-neutral-100">
                                         {/* Protein */}
                                         <div className="text-center">
                                             <div className="text-2xl font-bold text-accent-600">{stats.avgProtein}g</div>
@@ -306,6 +306,21 @@ export default function StatsPage({ userId }: StatsPageProps) {
                                             </div>
                                             <div className={`text-xs mt-1 ${getStatusColor(getPercentage(stats.avgFat, nutritionTargets?.fat_target || 65))}`}>
                                                 {getPercentage(stats.avgFat, nutritionTargets?.fat_target || 65)}% of target
+                                            </div>
+                                        </div>
+
+                                        {/* Sugar */}
+                                        <div className="text-center">
+                                            <div className="text-2xl font-bold text-pink-600">{stats.avgSugar}g</div>
+                                            <div className="text-xs text-neutral-500 mb-2">sugar/day</div>
+                                            <div className="h-2 bg-neutral-100 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-pink-500 rounded-full"
+                                                    style={{ width: `${Math.min(getPercentage(stats.avgSugar, nutritionTargets?.sugar_target || 50), 100)}%` }}
+                                                />
+                                            </div>
+                                            <div className={`text-xs mt-1 ${getStatusColor(getPercentage(stats.avgSugar, nutritionTargets?.sugar_target || 50))}`}>
+                                                {getPercentage(stats.avgSugar, nutritionTargets?.sugar_target || 50)}% of limit
                                             </div>
                                         </div>
                                     </div>

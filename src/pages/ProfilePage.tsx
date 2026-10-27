@@ -43,6 +43,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
         protein: '',
         carbs: '',
         fat: '',
+        sugar: '',
         image_url: '' as string | null
     });
 
@@ -227,6 +228,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             protein: '',
             carbs: '',
             fat: '',
+            sugar: '',
             image_url: null
         });
         setItemImagePreview(null);
@@ -244,6 +246,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             protein: item.protein_per_unit.toString(),
             carbs: item.carbs_per_unit.toString(),
             fat: item.fat_per_unit.toString(),
+            sugar: (item.sugar_per_unit || 0).toString(),
             image_url: item.image_url
         });
         setItemImagePreview(item.image_url);
@@ -261,6 +264,7 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
             protein_per_unit: parseFloat(newItemForm.protein),
             carbs_per_unit: parseFloat(newItemForm.carbs || '0'),
             fat_per_unit: parseFloat(newItemForm.fat || '0'),
+            sugar_per_unit: parseFloat(newItemForm.sugar || '0'),
             image_url: newItemForm.image_url
         };
 
@@ -592,6 +596,18 @@ export default function ProfilePage({ userId }: ProfilePageProps) {
                                         onChange={(e) => setNewItemForm({ ...newItemForm, fat: e.target.value })}
                                         min="0"
                                         placeholder="2"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="label">Sugar (g)</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="input"
+                                        value={newItemForm.sugar}
+                                        onChange={(e) => setNewItemForm({ ...newItemForm, sugar: e.target.value })}
+                                        min="0"
+                                        placeholder="1"
                                     />
                                 </div>
                             </div>

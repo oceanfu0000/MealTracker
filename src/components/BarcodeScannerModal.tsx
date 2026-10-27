@@ -252,7 +252,7 @@ export default function BarcodeScannerModal({ onClose, onProductFound }: Barcode
                             </div>
 
                             {/* Nutrition Info */}
-                            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-green-200">
+                            <div className="grid grid-cols-5 gap-2 pt-2 border-t border-green-200">
                                 <div className="text-center">
                                     <div className="text-lg font-bold text-neutral-900">{product.calories}</div>
                                     <div className="text-xs text-neutral-500">kcal</div>
@@ -268,6 +268,10 @@ export default function BarcodeScannerModal({ onClose, onProductFound }: Barcode
                                 <div className="text-center">
                                     <div className="text-lg font-bold text-purple-600">{product.fat}g</div>
                                     <div className="text-xs text-neutral-500">fat</div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-lg font-bold text-pink-500">{product.sugar}g</div>
+                                    <div className="text-xs text-neutral-500">sugar</div>
                                 </div>
                             </div>
 

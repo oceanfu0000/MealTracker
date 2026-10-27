@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageCircle, MapPin, Loader2, ChevronDown, ChevronUp, Utensils, Zap, Navigation, CalendarDays, RefreshCw } from 'lucide-react';
+import { MessageCircle, MapPin, Loader2, ChevronDown, ChevronUp, Utensils, Zap, Navigation, CalendarDays, RefreshCw, BookOpen } from 'lucide-react';
 import { useStore } from '../store';
 import { askFAQQuestion, FAQContext } from '../lib/api';
 
@@ -33,7 +33,7 @@ const FAQ_QUESTIONS: FAQItem[] = [
         title: 'What should I eat for my next meal?',
         getQuestion: (mealsLeft?: number) => {
             const mealsInfo = mealsLeft ? ` I have ${mealsLeft} meal${mealsLeft > 1 ? 's' : ''} left for today.` : '';
-            return `Based on my remaining calories and macros (protein, carbs, fat) for today, what should I eat for my next meal?${mealsInfo} Please suggest a specific dish or meal available in my location that fits my remaining calorie and macro budget. Include approximate nutrition values.`;
+            return `Based on my remaining calories, macros (protein, carbs, fat) and sugar limit for today, what should I eat for my next meal?${mealsInfo} Suggest 2-3 specific dishes I can get near my location that fit my remaining budget, with approximate nutrition values for each.`;
         },
         needsLocation: true,
     },
@@ -43,7 +43,7 @@ const FAQ_QUESTIONS: FAQItem[] = [
         title: 'Plan my meals for the rest of today',
         getQuestion: (mealsLeft?: number) => {
             const mealsInfo = mealsLeft ? ` I have ${mealsLeft} meal${mealsLeft > 1 ? 's' : ''} left for today.` : '';
-            return `Based on my remaining calories and macros for today, plan out what I should eat for the rest of the day.${mealsInfo} Please suggest specific dishes or foods available in my location for each remaining meal, distributing my remaining calories and macros appropriately. Include approximate nutrition values for each suggestion.`;
+            return `Based on my remaining calories, macros and sugar limit for today, plan what I should eat for the rest of the day.${mealsInfo} For each remaining meal, suggest a specific dish or food I can get near my location, splitting my remaining budget sensibly, with approximate nutrition values.`;
         },
         needsLocation: true,
         needsMealsLeft: true,
@@ -52,16 +52,103 @@ const FAQ_QUESTIONS: FAQItem[] = [
         id: 'healthy-snacks',
         icon: <Zap className="w-5 h-5" />,
         title: 'Healthy snack ideas',
-        getQuestion: () => 'What are some healthy snack options that fit my remaining calorie and macro budget for today? Please suggest snacks that are easy to prepare or find in my area. Include approximate nutrition values.',
+        getQuestion: () => 'What are some healthy, low-sugar snack options that fit my remaining calorie and macro budget for today? Suggest snacks that are easy to buy or prepare near my location, with approximate nutrition values.',
         needsLocation: true,
     },
 ];
+
+// General nutrition knowledge, shown instantly without calling the AI
+const NUTRITION_BASICS: { id: string; title: string; body: string[] }[] = [
+    {
+        id: 'calories',
+        title: 'What actually makes you gain or lose fat?',
+        body: [
+            'Your body weight follows energy balance: eat more calories than you burn and the extra is stored (mostly as fat); eat fewer and your body uses its stores.',
+            'Roughly 7,700 kcal is about 1 kg of body fat. A daily deficit of ~500 kcal leads to about 0.5 kg of fat loss per week.',
+            'No single food or nutrient makes you fat on its own. What matters is the total over days and weeks, which is why tracking helps.',
+        ],
+    },
+    {
+        id: 'sugar',
+        title: 'How does sugar lead to fat gain?',
+        body: [
+            'Sugar has 4 kcal per gram, the same as other carbs, but it is very easy to over-consume: it doesn\'t fill you up, and it hides in drinks, sauces and desserts.',
+            'Sugary drinks are the biggest trap. A can of soft drink has about 35 g of sugar (~140 kcal), and a large bubble tea or sweet teh tarik/kopi can have 30-50 g, without making you any less hungry.',
+            'Sugar itself isn\'t turned into fat by magic. It leads to fat gain when it pushes your total calories into a surplus, which it does easily.',
+            'Lots of added sugar, especially fructose from drinks, is also linked to fat build-up in the liver, insulin resistance and tooth decay, even at normal body weight.',
+            'The WHO recommends keeping added sugar under 10% of your calories (about 50 g on 2,000 kcal), ideally under 5%. That\'s the sugar limit used in this app.',
+        ],
+    },
+    {
+        id: 'fat',
+        title: 'Does eating fat make you fat?',
+        body: [
+            'Not by itself. Dietary fat is only stored as body fat when your total calories are above what you burn, the same as carbs or protein.',
+            'Fat is calorie-dense though: 9 kcal per gram vs 4 for protein and carbs. One tablespoon of cooking oil is ~120 kcal, so oily and deep-fried food adds up fast.',
+            'You still need fat for hormones, brain health and absorbing vitamins A, D, E and K. Aim for roughly 20-35% of calories from fat.',
+            'Prefer unsaturated fats (fish, nuts, olive or canola oil, avocado) and limit saturated fat (coconut milk, ghee, fatty meat) and trans fats (some fried snacks and pastries).',
+        ],
+    },
+    {
+        id: 'carbs',
+        title: 'Are carbs or rice at night bad?',
+        body: [
+            'No. Carbs are your body\'s main fuel, especially for exercise. Timing (like eating rice at night) matters far less than your total intake for the day.',
+            'Choose more fibre-rich carbs (brown rice, oats, wholemeal bread, fruit, vegetables, beans). They keep you full longer than white bread, sugary cereals or kuih.',
+            'Low-carb diets work for some people mainly because they cut calories, not because carbs are fattening.',
+        ],
+    },
+    {
+        id: 'protein',
+        title: 'Why is protein the priority?',
+        body: [
+            'Protein keeps you full the longest, helps you keep (or build) muscle while losing fat, and your body burns more calories digesting it than carbs or fat.',
+            'A good target for active people is about 1.6-2.2 g per kg of body weight per day, spread across your meals.',
+            'Easy sources: chicken, fish, eggs, tofu, tempeh, Greek yoghurt, milk, lean beef and protein shakes.',
+        ],
+    },
+    {
+        id: 'scale',
+        title: 'Why does my weight jump up and down?',
+        body: [
+            'Daily weight can swing 0.5-2 kg from water alone: salty or high-carb meals, hormones, sleep, stress and how much food is still in your gut all play a part.',
+            'Each gram of stored carbohydrate holds about 3 g of water, which is why weight drops fast at the start of a diet and bounces after a big meal.',
+            'Weigh yourself at the same time each morning and look at the weekly average trend, not single days.',
+        ],
+    },
+    {
+        id: 'alcohol',
+        title: 'What about alcohol?',
+        body: [
+            'Alcohol has 7 kcal per gram, almost as much as fat, and gives no nutrients. A pint of beer is roughly 200-250 kcal.',
+            'Your body prioritises burning alcohol, so fat burning pauses while you drink, and it tends to increase appetite and late-night snacking.',
+        ],
+    },
+];
+
+// Builds "Street, Neighbourhood, Country" from a Nominatim address, skipping repeats
+// (Singapore is both the city and the country, for example)
+function formatLocation(address: Record<string, string> | undefined): string {
+    if (!address) return '';
+    const street = address.road || address.pedestrian || address.footway;
+    const area = address.suburb || address.neighbourhood || address.quarter || address.city_district
+        || address.town || address.village || address.hamlet;
+    const city = address.city || address.municipality || address.county || address.state;
+    const parts: string[] = [];
+    for (const part of [street, area, city, address.country]) {
+        if (part && !parts.some(p => p.toLowerCase() === part.toLowerCase())) {
+            parts.push(part);
+        }
+    }
+    return parts.join(', ');
+}
 
 export default function FAQPage() {
     const { nutritionTargets, dailyTotals, profile } = useStore();
     const [location, setLocation] = useState('');
     const [mealsLeft, setMealsLeft] = useState<string>('');
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [expandedBasicId, setExpandedBasicId] = useState<string | null>(null);
     const [responses, setResponses] = useState<Record<string, string>>({});
     const [loadingId, setLoadingId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -126,18 +213,14 @@ export default function FAQPage() {
             async (position) => {
                 try {
                     const { latitude, longitude } = position.coords;
-                    // Use reverse geocoding to get location name
+                    // Reverse geocode at street level (zoom 18), in English
                     const response = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`
+                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en`
                     );
                     const data = await response.json();
-                    
-                    // Extract city/town and country
-                    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.state || '';
-                    const country = data.address?.country || '';
-                    const locationStr = [city, country].filter(Boolean).join(', ');
-                    
-                    setLocation(locationStr || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`);
+
+                    const locationStr = formatLocation(data.address);
+                    setLocation(locationStr || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
                 } catch (err) {
                     setError('Could not determine your location name. Please enter manually.');
                 } finally {
@@ -160,7 +243,8 @@ export default function FAQPage() {
                         setError('Could not get your location. Please enter manually.');
                 }
             },
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+            // High accuracy (GPS) so the street name is right; fall back to the timeout message
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
         );
     };
 
@@ -199,6 +283,8 @@ export default function FAQPage() {
                 carbsConsumed: dailyTotals.carbs,
                 fatTarget: nutritionTargets.fat_target,
                 fatConsumed: dailyTotals.fat,
+                sugarTarget: nutritionTargets.sugar_target,
+                sugarConsumed: dailyTotals.sugar,
                 location: location.trim() || undefined,
                 goal: profile?.goal || undefined,
                 mealsLeft: mealsLeftNum,
@@ -270,7 +356,7 @@ export default function FAQPage() {
                                 type="text"
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                placeholder="e.g., Kuala Lumpur, Malaysia"
+                                placeholder="e.g., Bedok North Avenue 3, Bedok, Singapore"
                                 className="input flex-1"
                             />
                             <button
@@ -290,7 +376,7 @@ export default function FAQPage() {
                             </button>
                         </div>
                         <p className="text-xs text-neutral-500 mt-1">
-                            Enter your city/country or use your current location
+                            Enter your street or area, or use your current location for nearby food suggestions
                         </p>
                     </div>
 
@@ -347,6 +433,12 @@ export default function FAQPage() {
                                 <span className="opacity-80">Fat:</span>
                                 <span className="ml-2 font-medium">
                                     {Math.round(dailyTotals.fat)}g / {nutritionTargets.fat_target}g
+                                </span>
+                            </div>
+                            <div>
+                                <span className="opacity-80">Sugar:</span>
+                                <span className="ml-2 font-medium">
+                                    {Math.round(dailyTotals.sugar)}g / {nutritionTargets.sugar_target}g
                                 </span>
                             </div>
                         </div>
@@ -426,6 +518,42 @@ export default function FAQPage() {
                             )}
                         </div>
                     ))}
+                </div>
+
+                {/* Nutrition Basics (static, no AI call) */}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-neutral-700 px-1">Nutrition Basics</h3>
+                    {NUTRITION_BASICS.map((topic) => (
+                        <div
+                            key={topic.id}
+                            className="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden"
+                        >
+                            <button
+                                onClick={() => setExpandedBasicId(expandedBasicId === topic.id ? null : topic.id)}
+                                className="w-full flex items-center gap-3 p-4 text-left hover:bg-neutral-50 transition-colors"
+                            >
+                                <div className="p-2 rounded-xl bg-neutral-100">
+                                    <BookOpen className="w-5 h-5 text-neutral-600" />
+                                </div>
+                                <span className="flex-1 font-medium text-neutral-900">{topic.title}</span>
+                                {expandedBasicId === topic.id
+                                    ? <ChevronUp className="w-5 h-5 text-neutral-400" />
+                                    : <ChevronDown className="w-5 h-5 text-neutral-400" />}
+                            </button>
+                            {expandedBasicId === topic.id && (
+                                <div className="px-4 pb-4 border-t border-neutral-100">
+                                    <ul className="mt-3 space-y-2 text-sm text-neutral-700 list-disc pl-5">
+                                        {topic.body.map((point, i) => (
+                                            <li key={i}>{point}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    <p className="text-xs text-neutral-400 px-1">
+                        General information, not medical advice. Talk to a doctor or dietitian about health conditions.
+                    </p>
                 </div>
 
                 {/* Info Note */}

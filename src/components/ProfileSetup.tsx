@@ -28,6 +28,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
         protein: number;
         carbs: number;
         fat: number;
+        sugar: number;
     } | null>(null);
 
     const { setProfile, setNutritionTargets } = useStore();
@@ -223,7 +224,7 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
                                 Your Daily Nutrition Targets
                             </h2>
 
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                                 <div className="text-center p-4 bg-primary-50 rounded-xl">
                                     <div className="text-3xl font-bold text-primary-700">
                                         {targets.calories}
@@ -250,6 +251,13 @@ export default function ProfileSetup({ userId, onComplete }: ProfileSetupProps) 
                                         {targets.fat}g
                                     </div>
                                     <div className="text-sm text-neutral-600 mt-1">Fat</div>
+                                </div>
+
+                                <div className="text-center p-4 bg-pink-50 rounded-xl">
+                                    <div className="text-3xl font-bold text-pink-600">
+                                        {targets.sugar}g
+                                    </div>
+                                    <div className="text-sm text-neutral-600 mt-1">Sugar (max)</div>
                                 </div>
                             </div>
 

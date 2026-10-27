@@ -579,22 +579,26 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-4 gap-2">
-                                <div className="text-center py-1.5 px-2 bg-primary-50 rounded-lg">
+                            <div className="grid grid-cols-5 gap-1.5">
+                                <div className="text-center py-1.5 px-1 bg-primary-50 rounded-lg">
                                     <div className="text-sm font-bold text-primary-700">{meal.calories}</div>
                                     <div className="text-xs text-neutral-600">cal</div>
                                 </div>
-                                <div className="text-center py-1.5 px-2 bg-accent-50 rounded-lg">
+                                <div className="text-center py-1.5 px-1 bg-accent-50 rounded-lg">
                                     <div className="text-sm font-bold text-accent-700">{Math.round(meal.protein)}g</div>
                                     <div className="text-xs text-neutral-600">protein</div>
                                 </div>
-                                <div className="text-center py-1.5 px-2 bg-blue-50 rounded-lg">
+                                <div className="text-center py-1.5 px-1 bg-blue-50 rounded-lg">
                                     <div className="text-sm font-bold text-blue-700">{Math.round(meal.carbs)}g</div>
                                     <div className="text-xs text-neutral-600">carbs</div>
                                 </div>
-                                <div className="text-center py-1.5 px-2 bg-purple-50 rounded-lg">
+                                <div className="text-center py-1.5 px-1 bg-purple-50 rounded-lg">
                                     <div className="text-sm font-bold text-purple-700">{Math.round(meal.fat)}g</div>
                                     <div className="text-xs text-neutral-600">fat</div>
+                                </div>
+                                <div className="text-center py-1.5 px-1 bg-pink-50 rounded-lg">
+                                    <div className="text-sm font-bold text-pink-600">{Math.round((meal.sugar || 0))}g</div>
+                                    <div className="text-xs text-neutral-600">sugar</div>
                                 </div>
                             </div>
                         </div>
@@ -645,22 +649,26 @@ export default function GroupedMealCard({ group, onDelete, otherUngroupedMeals =
                     </div>
 
                     {/* Totals */}
-                    <div className="grid grid-cols-4 gap-2">
-                        <div className="text-center py-1.5 px-2 bg-primary-50 rounded-lg">
+                    <div className="grid grid-cols-5 gap-1.5">
+                        <div className="text-center py-1.5 px-1 bg-primary-50 rounded-lg">
                             <div className="text-sm font-bold text-primary-700">{Math.round(group.totalCalories)}</div>
                             <div className="text-xs text-neutral-600">cal</div>
                         </div>
-                        <div className="text-center py-1.5 px-2 bg-accent-50 rounded-lg">
+                        <div className="text-center py-1.5 px-1 bg-accent-50 rounded-lg">
                             <div className="text-sm font-bold text-accent-700">{Math.round(group.totalProtein)}g</div>
                             <div className="text-xs text-neutral-600">protein</div>
                         </div>
-                        <div className="text-center py-1.5 px-2 bg-blue-50 rounded-lg">
+                        <div className="text-center py-1.5 px-1 bg-blue-50 rounded-lg">
                             <div className="text-sm font-bold text-blue-700">{Math.round(group.totalCarbs)}g</div>
                             <div className="text-xs text-neutral-600">carbs</div>
                         </div>
-                        <div className="text-center py-1.5 px-2 bg-purple-50 rounded-lg">
+                        <div className="text-center py-1.5 px-1 bg-purple-50 rounded-lg">
                             <div className="text-sm font-bold text-purple-700">{Math.round(group.totalFat)}g</div>
                             <div className="text-xs text-neutral-600">fat</div>
+                        </div>
+                        <div className="text-center py-1.5 px-1 bg-pink-50 rounded-lg">
+                            <div className="text-sm font-bold text-pink-600">{Math.round(group.totalSugar)}g</div>
+                            <div className="text-xs text-neutral-600">sugar</div>
                         </div>
                     </div>
                 </button>

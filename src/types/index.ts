@@ -8,6 +8,7 @@ export interface DailyTotals {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     mealCount: number;
 }
 
@@ -20,6 +21,7 @@ export interface GroupedMeal {
     totalProtein: number;
     totalCarbs: number;
     totalFat: number;
+    totalSugar: number;
     latestLoggedAt: string;
 }
 
@@ -40,6 +42,7 @@ export interface MealAnalysis {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     confidence?: number;
 }
 
@@ -53,6 +56,7 @@ export interface QuickAddWithQuantity {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
 }
 
 // Activity adjustment response

@@ -16,6 +16,7 @@ export default function EditMealModal({ meal, onClose, onSave }: EditMealModalPr
     const [protein, setProtein] = useState(meal.protein.toString());
     const [carbs, setCarbs] = useState(meal.carbs.toString());
     const [fat, setFat] = useState(meal.fat.toString());
+    const [sugar, setSugar] = useState((meal.sugar || 0).toString());
     const [saving, setSaving] = useState(false);
 
     const handleSave = async () => {
@@ -28,8 +29,9 @@ export default function EditMealModal({ meal, onClose, onSave }: EditMealModalPr
         const prot = parseFloat(protein) || 0;
         const carb = parseFloat(carbs) || 0;
         const fatVal = parseFloat(fat) || 0;
+        const sugarVal = parseFloat(sugar) || 0;
 
-        if (cal < 0 || prot < 0 || carb < 0 || fatVal < 0) {
+        if (cal < 0 || prot < 0 || carb < 0 || fatVal < 0 || sugarVal < 0) {
             toast.error('Values cannot be negative');
             return;
         }
@@ -42,6 +44,7 @@ export default function EditMealModal({ meal, onClose, onSave }: EditMealModalPr
                 protein: prot,
                 carbs: carb,
                 fat: fatVal,
+                sugar: sugarVal,
             });
 
             if (updated) {
@@ -100,7 +103,7 @@ export default function EditMealModal({ meal, onClose, onSave }: EditMealModalPr
                     </div>
 
                     {/* Macros Grid */}
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                         <div>
                             <label className="block text-sm font-medium text-neutral-700 mb-1">
                                 Protein (g)
@@ -137,6 +140,20 @@ export default function EditMealModal({ meal, onClose, onSave }: EditMealModalPr
                                 type="number"
                                 value={fat}
                                 onChange={(e) => setFat(e.target.value)}
+                                className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                placeholder="0"
+                                min="0"
+                                step="0.1"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">
+                                Sugar (g)
+                            </label>
+                            <input
+                                type="number"
+                                value={sugar}
+                                onChange={(e) => setSugar(e.target.value)}
                                 className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
                                 placeholder="0"
                                 min="0"

@@ -320,7 +320,7 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                             </div>
 
                                             {/* Macros Grid */}
-                                            <div className="grid grid-cols-3 gap-3 pt-2">
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                                                 <div>
                                                     <div className="text-xs text-neutral-500 mb-1">Protein</div>
                                                     <div className="text-sm font-medium">
@@ -363,6 +363,21 @@ export default function HistoryPage({ userId }: HistoryPageProps) {
                                                         <div
                                                             className="h-full bg-purple-500"
                                                             style={{ width: `${getBarWidth(day.fat, nutritionTargets?.fat_target || 60)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs text-neutral-500 mb-1">Sugar</div>
+                                                    <div className="text-sm font-medium">
+                                                        {Math.round(day.sugar)}g
+                                                        <span className={`text-xs ml-1 ${day.sugar > (nutritionTargets?.sugar_target || 50) ? 'text-red-500' : 'text-neutral-400'}`}>
+                                                            ({day.sugar > (nutritionTargets?.sugar_target || 50) ? '+' : ''}{Math.abs(Math.round((nutritionTargets?.sugar_target || 50) - day.sugar))}g {day.sugar > (nutritionTargets?.sugar_target || 50) ? 'over' : 'left'})
+                                                        </span>
+                                                    </div>
+                                                    <div className="h-1 bg-neutral-100 rounded-full mt-1 overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-pink-500"
+                                                            style={{ width: `${getBarWidth(day.sugar, nutritionTargets?.sugar_target || 50)}%` }}
                                                         />
                                                     </div>
                                                 </div>

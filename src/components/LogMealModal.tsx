@@ -13,6 +13,7 @@ interface MealGroupItem {
     protein: number;
     carbs: number;
     fat: number;
+    sugar: number;
     image_url: string | null;
     meal_type: 'camera' | 'manual' | 'quick';
     quick_item_id?: string;
@@ -55,6 +56,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         protein: '',
         carbs: '',
         fat: '',
+        sugar: '',
     });
     const [saveAsQuickAdd, setSaveAsQuickAdd] = useState(false);
 
@@ -112,6 +114,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     protein: analysis.protein.toString(),
                     carbs: analysis.carbs.toString(),
                     fat: analysis.fat.toString(),
+                    sugar: analysis.sugar.toString(),
                 });
                 setShowCorrectionInput(true); // Show correction option after analysis
                 setActiveTab('manual');
@@ -166,6 +169,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     protein: analysis.protein.toString(),
                     carbs: analysis.carbs.toString(),
                     fat: analysis.fat.toString(),
+                    sugar: analysis.sugar.toString(),
                 });
                 toast.success('Re-analyzed with corrections!');
             }
@@ -217,6 +221,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             protein: Math.round(barcodeProduct.protein * qty).toString(),
             carbs: Math.round(barcodeProduct.carbs * qty).toString(),
             fat: Math.round(barcodeProduct.fat * qty).toString(),
+            sugar: Math.round(barcodeProduct.sugar * qty).toString(),
         });
         setActiveTab('manual');
         toast.success('Product added to form');
@@ -248,6 +253,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     protein: analysis.protein.toString(),
                     carbs: analysis.carbs.toString(),
                     fat: analysis.fat.toString(),
+                    sugar: analysis.sugar.toString(),
                 });
                 setActiveTab('manual');
             } else {
@@ -279,6 +285,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         let finalProtein = parseFloat(manualForm.protein || '0');
         let finalCarbs = parseFloat(manualForm.carbs || '0');
         let finalFat = parseFloat(manualForm.fat || '0');
+        let finalSugar = parseFloat(manualForm.sugar || '0');
         let finalDescription = manualForm.description;
 
         if (isGroupMeal) {
@@ -290,6 +297,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             finalProtein = Number((finalProtein * portionMultiplier).toFixed(1));
             finalCarbs = Number((finalCarbs * portionMultiplier).toFixed(1));
             finalFat = Number((finalFat * portionMultiplier).toFixed(1));
+            finalSugar = Number((finalSugar * portionMultiplier).toFixed(1));
             finalDescription = `${manualForm.description} (${myPortion}/${numPeople} share)`;
         }
 
@@ -300,6 +308,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             protein: finalProtein,
             carbs: finalCarbs,
             fat: finalFat,
+            sugar: finalSugar,
             image_url: selectedImage,
             meal_type: selectedImage ? 'camera' : 'manual',
             quantity: 1,
@@ -308,7 +317,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
         setMealGroupItems([...mealGroupItems, newItem]);
         
         // Reset form for next item
-        setManualForm({ description: '', calories: '', protein: '', carbs: '', fat: '' });
+        setManualForm({ description: '', calories: '', protein: '', carbs: '', fat: '', sugar: '' });
         setSelectedImage(null);
         setImageFile(null);
         setIsGroupMeal(false);
@@ -333,6 +342,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
             carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
             fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
+            sugar: Number(((selectedQuickItem.sugar_per_unit || 0) * ratio).toFixed(1)),
             image_url: null,
             meal_type: 'quick',
             quick_item_id: selectedQuickItem.id,
@@ -358,8 +368,9 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             protein: acc.protein + item.protein,
             carbs: acc.carbs + item.carbs,
             fat: acc.fat + item.fat,
+            sugar: acc.sugar + item.sugar,
         }),
-        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+        { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0 }
     );
 
     // Submit all items in meal group
@@ -392,6 +403,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                     protein: item.protein,
                     carbs: item.carbs,
                     fat: item.fat,
+                    sugar: item.sugar,
                     meal_group_id: groupId,
                     meal_group_name: groupName,
                     logged_at: finalLoggedAt,
@@ -436,6 +448,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
             let finalProtein = parseFloat(manualForm.protein);
             let finalCarbs = parseFloat(manualForm.carbs);
             let finalFat = parseFloat(manualForm.fat);
+            let finalSugar = parseFloat(manualForm.sugar || '0');
             let finalDescription = manualForm.description;
 
             if (isGroupMeal) {
@@ -447,6 +460,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 finalProtein = Number((finalProtein * portionMultiplier).toFixed(1));
                 finalCarbs = Number((finalCarbs * portionMultiplier).toFixed(1));
                 finalFat = Number((finalFat * portionMultiplier).toFixed(1));
+                finalSugar = Number((finalSugar * portionMultiplier).toFixed(1));
                 finalDescription = `${manualForm.description} (${myPortion}/${numPeople} share)`;
             }
 
@@ -460,6 +474,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 protein: finalProtein,
                 carbs: finalCarbs,
                 fat: finalFat,
+                sugar: finalSugar,
                 meal_group_id: null,
                 meal_group_name: null,
                 logged_at: finalLoggedAt,
@@ -477,6 +492,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                         protein_per_unit: parseFloat(manualForm.protein),
                         carbs_per_unit: parseFloat(manualForm.carbs),
                         fat_per_unit: parseFloat(manualForm.fat),
+                        sugar_per_unit: parseFloat(manualForm.sugar || '0'),
                         image_url: null
                     });
                 }
@@ -527,6 +543,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                 protein: Number((selectedQuickItem.protein_per_unit * ratio).toFixed(1)),
                 carbs: Number((selectedQuickItem.carbs_per_unit * ratio).toFixed(1)),
                 fat: Number((selectedQuickItem.fat_per_unit * ratio).toFixed(1)),
+                sugar: Number(((selectedQuickItem.sugar_per_unit || 0) * ratio).toFixed(1)),
                 meal_group_id: null,
                 meal_group_name: null,
                 logged_at: finalLoggedAt,
@@ -655,6 +672,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                     <span><strong>{Math.round(mealGroupTotals.protein)}g</strong> protein</span>
                                     <span><strong>{Math.round(mealGroupTotals.carbs)}g</strong> carbs</span>
                                     <span><strong>{Math.round(mealGroupTotals.fat)}g</strong> fat</span>
+                                    <span><strong>{Math.round(mealGroupTotals.sugar)}g</strong> sugar</span>
                                 </div>
                             </div>
                         ) : (
@@ -866,7 +884,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                     </div>
 
                                     {/* Nutrition per serving */}
-                                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-green-200">
+                                    <div className="grid grid-cols-5 gap-2 pt-2 border-t border-green-200">
                                         <div className="text-center">
                                             <div className="text-lg font-bold text-neutral-900">{barcodeProduct.calories}</div>
                                             <div className="text-xs text-neutral-500">kcal</div>
@@ -882,6 +900,10 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         <div className="text-center">
                                             <div className="text-lg font-bold text-purple-600">{barcodeProduct.fat}g</div>
                                             <div className="text-xs text-neutral-500">fat</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <div className="text-lg font-bold text-pink-500">{barcodeProduct.sugar}g</div>
+                                            <div className="text-xs text-neutral-500">sugar</div>
                                         </div>
                                     </div>
 
@@ -1125,6 +1147,21 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         placeholder="10"
                                     />
                                 </div>
+
+                                <div>
+                                    <label className="label">Sugar (g)</label>
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        className="input"
+                                        value={manualForm.sugar}
+                                        onChange={(e) =>
+                                            setManualForm({ ...manualForm, sugar: e.target.value })
+                                        }
+                                        min="0"
+                                        placeholder="5"
+                                    />
+                                </div>
                             </div>
 
                             {/* Group Meal Sharing */}
@@ -1179,7 +1216,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                         {manualForm.calories && (
                                             <div className="p-3 bg-white rounded-lg border border-neutral-200">
                                                 <p className="text-xs font-medium text-neutral-600 mb-2">Your portion:</p>
-                                                <div className="grid grid-cols-4 gap-2 text-center">
+                                                <div className="grid grid-cols-5 gap-2 text-center">
                                                     <div>
                                                         <div className="text-sm font-bold text-primary-600">
                                                             {Math.round((parseInt(manualForm.calories || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1'))}
@@ -1203,6 +1240,12 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                             {((parseFloat(manualForm.fat || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1')).toFixed(1)}g
                                                         </div>
                                                         <div className="text-xs text-neutral-500">fat</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-primary-600">
+                                                            {((parseFloat(manualForm.sugar || '0') / parseFloat(groupSize || '2')) * parseFloat(portionAte || '1')).toFixed(1)}g
+                                                        </div>
+                                                        <div className="text-xs text-neutral-500">sugar</div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1300,7 +1343,7 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                             </div>
 
                                             <div className="p-4 bg-neutral-100 rounded-lg">
-                                                <div className="grid grid-cols-4 gap-3 text-center">
+                                                <div className="grid grid-cols-5 gap-3 text-center">
                                                     <div>
                                                         <div className="text-sm font-bold text-neutral-900">
                                                             {Math.round(
@@ -1332,6 +1375,14 @@ export default function LogMealModal({ userId, onClose, onMealLogged }: LogMealM
                                                             )}g
                                                         </div>
                                                         <div className="text-xs text-neutral-600">fat</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-neutral-900">
+                                                            {Math.round(
+                                                                (selectedQuickItem.sugar_per_unit || 0) * (parseFloat(quantity || '0') / (selectedQuickItem.serving_size || 1))
+                                                            )}g
+                                                        </div>
+                                                        <div className="text-xs text-neutral-600">sugar</div>
                                                     </div>
                                                 </div>
                                             </div>

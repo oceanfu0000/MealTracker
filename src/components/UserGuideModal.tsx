@@ -89,7 +89,7 @@ const guideSteps: GuideStep[] = [
         icon: <Target className="w-12 h-12" />,
         title: "🎯 Set Your Goals",
         description: "Head to the Profile section to customize your nutrition targets. Whether you're cutting, bulking, or maintaining - set your own calorie and macro goals!",
-        example: "Adjust: Daily calories, protein, carbs, and fat targets based on your fitness goals.",
+        example: "Adjust: Daily calories, protein, carbs, fat, and sugar targets based on your fitness goals.",
         tip: "Your progress rings on the home page will show how close you are to hitting your daily targets.",
         color: "from-red-500 to-rose-500"
     }

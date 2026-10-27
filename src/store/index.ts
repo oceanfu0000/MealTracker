@@ -16,7 +16,7 @@ interface AppState {
 export const useStore = create<AppState>((set) => ({
     profile: null,
     nutritionTargets: null,
-    dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0, mealCount: 0 },
+    dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, mealCount: 0 },
     selectedDate: new Date(),
 
     setProfile: (profile) => set({ profile }),
